@@ -1,7 +1,7 @@
 # Real-data format request (task 1.5)
 
 To: co-supervisor ([name]) · Cc: Supervisor Bakhtawar Abbasi · From: Taha Ahmed (23K-0534), MandiSaathi FYP
-Status: draft 2026-11-23. Record the sent date and channel in DECISIONS.md D-008.
+Status: sent 2026-11-23 on WhatsApp (DECISIONS.md D-008).
 
 ---
 

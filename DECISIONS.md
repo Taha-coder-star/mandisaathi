@@ -53,4 +53,4 @@ Amendment A1 (file 03 §9): synthetic data in FYP-I, real data in FYP-II.
 - FYP-II S1: the real data (co-supervisor export; AMIS public pages as the backup under `docs/fetch_policy.md`) through its own loader. The final 12 months are sealed as the lockbox the day the data arrives, before anyone looks beyond a format check.
 - The file 03 D3 fallback triggers (Day 3 / Day 10) are removed. FYP-I results are pipeline verification only; no claim about real-market accuracy.
 - Supersedes D-001's "AMIS only" for FYP-I.
-- Real-data format request: draft `docs/requests/2026-11-23_real_data_request.md`. **Sent: pending** (date + channel go here). G1 (task 10.2, Fri 4 Dec) needs it acknowledged or chased.
+- Real-data format request: draft `docs/requests/2026-11-23_real_data_request.md`. **Sent: 2026-11-23 on WhatsApp** (by Taha). G1 (task 10.2, Fri 4 Dec) needs it acknowledged or chased.
