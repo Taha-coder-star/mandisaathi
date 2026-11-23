@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>06 WhatsApp UX, Alerts and State</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: R9 / R10 · WhatsApp Reply Formats, Alerts and Conversation State · Resolves D12, D13, D14</h1>
+<div class="sub">What each answer looks like inside WhatsApp's limits, how alerts work with the 24-hour rule, and the minimum state needed for follow-ups</div>
+<div class="meta">Plan pack 3 · File 06 · 22 Nov 2026 · Owner: Umar · Limits checked against official Meta docs on 2026-10-01 (Manzil R4/R9), re-check on Day 3 · All formats below are service messages inside the 24 h window, therefore free, except the two alert templates</div>
+
+<h2>1. Verified capability and limit table (relevant subset)</h2>
+<table>
+<tr><th>Capability</th><th>Verified limits</th><th>Status</th><th>Use in MandiSaathi</th></tr>
+<tr><td>Text message</td><td>Body up to 4,096 characters</td><td><span class="tag v">VERIFIED</span></td><td>All answers; facts block rendered by template</td></tr>
+<tr><td>Reply buttons</td><td>≤ 3 buttons, title ≤ 20 chars, body ≤ 1,024, footer ≤ 60; tap returns <code>button_reply.id</code> + <code>context.id</code></td><td><span class="tag v">VERIFIED</span></td><td>Echo-confirm, "Tafseel / Alert / Aur mandiyan", clarifications with ≤ 3 options</td></tr>
+<tr><td>List message</td><td>≤ 10 rows, row title ≤ 24, description ≤ 72, header text only</td><td><span class="tag v">VERIFIED</span></td><td>Crop picker, more than 3 place candidates, subscription list</td></tr>
+<tr><td>Quoted reply (user → business)</td><td>Webhook carries <code>context.id</code> = WAMID of the quoted message</td><td><span class="tag v">VERIFIED</span></td><td>"Is wali mandi" when the farmer swipe-replies to an answer</td></tr>
+<tr><td>Location message (send)</td><td>lat, lng required; name, address optional</td><td><span class="tag v">VERIFIED</span></td><td>"Mandi ka pata" → native map pin</td></tr>
+<tr><td>Location request message</td><td>Asks the user to share a location</td><td><span class="tag v">VERIFIED</span> (existence)</td><td>"Apni location bhejein" when the origin is missing</td></tr>
+<tr><td>Inbound location</td><td>Webhook type <code>location</code> with lat/lng</td><td><span class="tag v">VERIFIED</span></td><td>Origin for F2</td></tr>
+<tr><td>Inbound audio</td><td>Webhook type <code>audio</code> with media ID; download URL valid 5 min; media ID life 7 or 30 days (official pages conflict)</td><td><span class="tag v">VERIFIED</span> / CONFLICT</td><td>Download inside the turn, immediately</td></tr>
+<tr><td>Interactive carousel</td><td>2–10 cards, image header required</td><td><span class="tag v">VERIFIED</span></td><td><b>Not used</b>: we have no meaningful images; text + buttons is clearer for farmers</td></tr>
+<tr><td>Templates</td><td>Needed outside the 24 h window; categorised by Meta; paid per delivery</td><td><span class="tag v">VERIFIED</span></td><td>Only <code>price_alert</code> and <code>daily_rates</code></td></tr>
+<tr><td>Typing indicator / read receipt</td><td>Mark-read with optional typing indicator</td><td><span class="tag r">PARTIAL</span> (worked in the Manzil gateway)</td><td>Sent at once while STT/LLM run</td></tr>
+<tr><td>Groups API</td><td>Official Business Account required, ≤ 8 participants</td><td><span class="tag v">VERIFIED</span></td><td>Not used (no verification; too small)</td></tr>
+</table>
+
+<h2>2. Recommended reply formats (D12)</h2>
+<p>Rule (from the Manzil red team, R-21): <b>every fact is rendered by a deterministic template from the tool payload</b>. The LLM may add one short framing sentence and a question back; it may not restate any number.</p>
+<h3>2.1 Price now</h3>
+<pre>[LLM wrapper, optional] Ji, ye Lahore ka taaza rate hai:
+[template] 🧅 Pyaz · Lahore (Badami Bagh)
+Rs 2,850–3,000 fi mann (40 kg) · 10 Dec · AMIS Punjab
+[buttons] [Agle din ka andaza] [Kahan bechoon?] [Alert lagayein]</pre>
+<p>If the latest quote is older than 2 trading days, the template adds "⚠ Taaza rate nahi mila; aakhri rate 7 Dec ka hai".</p>
+<h3>2.2 Short-term forecast (F1)</h3>
+<pre>[template] 🍅 Tamatar · Lahore · agle 3 din ka andaza
+Rs 2,100–2,600 fi mann (80% andaza) · beech ka andaza Rs 2,350
+Wajah: mandi mein aamad zyada hai · baarish ke baad supply barhi
+[template] Ye andaza hai, waada nahi.
+[buttons] [Kahan bechoon?] [Alert lagayein] [Doosri mandi]</pre>
+<h3>2.3 Where to sell (F2)</h3>
+<pre>[echo] Pyaz · 50 mann · Okara se
+[template] 1. Lahore: Rs 3,050–3,250 fi mann · kharche ke baad ≈ Rs 1,47,000
+2. Okara: Rs 2,850–3,000 · ≈ Rs 1,44,500
+3. Sahiwal: Rs 2,900–3,100 · ≈ Rs 1,43,800
+Lahore nazdeeki mandi se ≈ Rs 2,500 zyada deti hai, transport ke baad bhi.
+Kharche: transport Rs 85/mann (130 km), commission 6%  ← farmer can challenge these
+[buttons] [1 ki tafseel] [Transport badlein] [Alert lagayein]</pre>
+<p>When the risk rule fails: "Nazdeeki mandi (Okara) theek hai: door jaane ka faida yaqeeni nahi." Numbers above are illustrative, not model output.</p>
+<h3>2.4 Harvest outlook (F3)</h3>
+<pre>[template] 🍅 Tamatar · Lahore · February 2027 ka andaza
+Rs 1,900–3,400 fi mann · aam se zyada hone ka imkaan 70%
+Wajah: pichle season rate kam tha, is liye kam kashtkaron ne lagaya.
+⚠ Ye door ka andaza hai, faasla bara hai. Faisla apni samajh se karein.</pre>
+<p>Where F3 has no skill for the crop: "February mein tamatar ka aam rate Rs X–Y raha hai. Is fasal ke liye hamara model aam rate se behtar andaza nahi deta."</p>
+<h3>2.5 Clarifications and errors</h3>
+<ul>
+<li>Missing crop: list message (covered crops). Missing place: location request message + "ya shehar ka naam likhein". Ambiguous place: ≤ 3 buttons with canonical names.</li>
+<li>"Bori" without weight: buttons [50 kg] [100 kg] [Doosra].</li>
+<li>Out of coverage: "Abhi sirf Punjab ki mandiyan aur pyaz, tamatar, aloo, gandum." Out of scope: fixed redirect (Meta §4.7 scope guard).</li>
+<li>Uncovered series: "Is mandi ke liye andaza dene ke liye data kaafi nahi; taaza rate ye hai…"</li>
+</ul>
+
+<h2>3. Alerts and digests (D14)</h2>
+<table>
+<tr><th>Item</th><th>Design</th></tr>
+<tr><td>Opt-in</td><td>Only after an explicit farmer request in chat and a confirmation tap. Stored with timestamp and the confirming WAMID.</td></tr>
+<tr><td>Types</td><td>(a) <b>Threshold</b>: crop × mandi × direction × price. (b) <b>Daily digest</b>: up to 3 followed crop × mandi rates + F1 range.</td></tr>
+<tr><td>Evaluation time</td><td>After the daily load and scoring (≈ 09:30 PKT <span class="tag a">ASSUMPTION</span> until the source publish time is known, R3).</td></tr>
+<tr><td>Inside 24 h window</td><td>Free-form service message.</td></tr>
+<tr><td>Outside window</td><td>Approved template only (<code>price_alert</code>, <code>daily_rates</code>); categories recorded from Meta's review (file 02).</td></tr>
+<tr><td>Anti-spam</td><td>Hysteresis: a threshold re-arms only after the price moves back 3% past it. Max 1 alert per subscription per day; max 3 messages per farmer per day from alerts; no alert from a SUSPECT price.</td></tr>
+<tr><td>Cost cap</td><td>A daily template budget (count) in config; when reached, digests stop first, threshold alerts last; logged.</td></tr>
+<tr><td>STOP</td><td>"STOP" / "band karo" → all subscriptions off, farmer data deleted except an anonymous message count; confirmation message sent.</td></tr>
+<tr><td>Auto-expiry</td><td>Subscriptions lapse after 30 days unless renewed with one tap <span class="tag a">ASSUMPTION</span></td></tr>
+</table>
+
+<h2>4. Conversation-state model (D13, minimum persistent state)</h2>
+<p>All in Postgres, keyed by the farmer's hashed number. Text and voice write the same records; modality is only a source attribute.</p>
+<table>
+<tr><th>Record</th><th>Fields (minimum)</th><th>Purpose</th></tr>
+<tr><td>wa_user</td><td>user_id, wa_number_enc, wa_number_hash, preferred_language, consent_at, district (approx.), last_inbound_at, service_window_expires_at</td><td>Identity, consent, window rule</td></tr>
+<tr><td>query_state (1 per user)</td><td>intent, crop, place {mandi_ids[], origin lat/lng, status RESOLVED / AMBIGUOUS / UNKNOWN / OUT_OF_COVERAGE}, quantity_kg, unit_raw, horizon; each slot with raw, source (text/voice/pin/inferred), confidence, confirmed, updated_at</td><td>Current question; voice-sourced slots visible for echo logic</td></tr>
+<tr><td>query_patch_log</td><td>version, patch[], message_id</td><td>Undo ("pehle wala"), debugging, benchmark</td></tr>
+<tr><td>answer_shown</td><td>answer_id, kind (PRICE / F1 / F2 / F3), run_id, positions [1…n → mandi_id], reply_wamid, shown_at</td><td>Resolves "2 number wali" and quoted replies; proves which run produced the numbers</td></tr>
+<tr><td>pending_clarification</td><td>slot, candidates[], asked_wamid, expires_at</td><td>Holds the open question; no tool call that needs the slot while open</td></tr>
+<tr><td>subscription</td><td>user_id, type, crop_id, mandi_id, direction, threshold, armed, last_sent_at, active</td><td>Alerts and digests</td></tr>
+<tr><td>message_log</td><td>wamid, direction, modality, text_or_transcript, stt_meta, intent, tool_calls_json, tool_payload_json, validator_result</td><td>Audit, replay, live evaluation</td></tr>
+</table>
+<p><b>What the LLM sees per turn</b> (compact): query_state summary, the last answer's positions (position → mandi name + one-line facts), pending_clarification, the last ~6 messages, the language preference. Never the full history; never phone numbers.</p>
+
+<h3>4.1 Required examples</h3>
+<table>
+<tr><th>Farmer says</th><th>Parser / LLM output</th><th>Backend does</th><th>Reply</th></tr>
+<tr><td>"aur tamatar?"</td><td>patch {crop, set, "tamatar"}</td><td>keep place, quantity, intent → re-run the last tool</td><td>Same format, tomato</td></tr>
+<tr><td>"Lahore ka bhi batao"</td><td>{place, add, "Lahore"}</td><td>"bhi" → add; union of mandis → re-run</td><td>Adds Lahore rows</td></tr>
+<tr><td>"2 number wali ki tafseel"</td><td>ref {position: 2}</td><td>answer_shown latest → mandi_id → re-fetch current numbers</td><td>Detail card with mandi name echoed</td></tr>
+<tr><td>"nahi, 80 mann"</td><td>{quantity, set, "80 mann"}</td><td>replace; re-run F2</td><td>New ranking, "80 mann" echoed</td></tr>
+<tr><td>"agle hafte?"</td><td>{horizon, set, "agle hafte"}</td><td>horizon 1–7 → get_forecast</td><td>F1 range</td></tr>
+<tr><td>Location pin only</td><td>–</td><td>origin = pin; if crop missing → ask crop</td><td>Crop list message</td></tr>
+<tr><td>Returns after 3 days</td><td>–</td><td>state kept 30 days; always re-fetch (new run)</td><td>"Pichli baar: pyaz, Okara, 50 mann. Wahi dekhein? [Haan] [Naya sawal]"</td></tr>
+</table>
+<p><b>Expiry</b>: positions are valid for the latest answer only and for 24 h; query_state resets after 30 days idle; subscriptions follow §3.</p>
+
+<h2>5. Key edge cases</h2>
+<ol>
+<li><b>Answer from an old run</b>: "2 number wali" asked next morning → re-fetch from the new run; if the ranking changed, say so ("aaj ki taaza ranking ye hai").</li>
+<li><b>Quoted reply to an old answer</b>: context.id → reply_wamid → positions; honoured, but numbers are re-fetched.</li>
+<li><b>Two crops in one message</b> ("pyaz aur aloo ka rate"): two answer blocks in one reply, each from its own tool call.</li>
+<li><b>Pending clarification ignored</b>: keep it, process the new slots, re-ask once, expire after 2 turns.</li>
+<li><b>Voice then text in a burst</b>: processed in WhatsApp-timestamp order inside one serialised turn (file 08).</li>
+<li><b>Quantity implausible</b> ("5,000 mann" from voice): echo-confirm before F2.</li>
+<li><b>Pin far from all covered mandis</b> (> 150 km): OUT_OF_COVERAGE with the nearest covered mandi named.</li>
+</ol>
+
+<h2>6. Decisions</h2>
+<div class="box">
+<p><b>D12 → DECIDED.</b> Text answers with template-rendered fact blocks + up to 3 reply buttons; list messages for pickers; native location messages on request; no carousels, no images, no voice replies in FYP-I.</p>
+<p><b>D13 → DECIDED.</b> DB-persisted structured query state with per-slot provenance, op-based patches, answer positions with run IDs, pending clarification; compact snapshot to the LLM; positions valid 24 h for the latest answer; state reset after 30 days.</p>
+<p><b>D14 → DECIDED.</b> Explicit opt-in; threshold alerts and daily digests evaluated after the daily run; templates outside the window; hysteresis and daily caps; template budget cap; STOP deletes.</p>
+</div>
+</body></html>

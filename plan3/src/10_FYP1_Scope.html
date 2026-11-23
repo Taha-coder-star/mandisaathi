@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>10 FYP-I Scope</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: Final FYP-I Scope (v1.0, 22 Nov 2026)</h1>
+<div class="sub">What the FYP-I evaluation shows, what it does not, the five exact demo scenarios, the measurable pass criteria and the cut order</div>
+<div class="meta">Plan pack 3 · File 10 · Basis: RFC v1.0 (file 08) + red-team amendments (file 09) + D1–D18 + file 05 thresholds + the S-DEMO snapshot (file 03 §7) · Team: 3 members × 4 working weeks (Days 1–20, 23 Nov – 18 Dec) + evaluation week 21–23 Dec <span class="tag a">ASSUMPTION</span> · No new architecture decisions are introduced here · <b>Includes amendment A1: FYP-I runs on team-generated synthetic data (file 03 §9)</b></div>
+
+<h2>1. FYP-I objective</h2>
+<p>Show the supervisor and the jury, on real WhatsApp (team phones plus one jury phone, our test number), that MandiSaathi:</p>
+<ol>
+<li>answers farmer price questions in Roman Urdu, Urdu, English, mixed text and Urdu voice notes, with <b>only numbers that come from our data and models</b>;</li>
+<li>tells a farmer where to sell after transport, commission and spoilage, and says "nearest mandi is fine" when the gain is not certain;</li>
+<li>keeps a price alert the farmer asked for and delivers it once, without spam;</li>
+<li>is honest about what it cannot answer;</li>
+<li>stands on first results (E1–E6) produced under frozen, pre-registered rules on <b>synthetic data the team generated</b>. These prove the pipeline (it recovers a planted signal and reports no skill where none exists), not real-market accuracy, which is measured on the real data in FYP-II.</li>
+</ol>
+<div class="box"><b>Pass condition for FYP-I as a whole:</b> all 5 scenarios (§5) pass 3 consecutive rehearsals on Android + iPhone, wording paraphrased (not scripted), with <b>zero numbers not present in a tool result</b>; E1–E6 are reproducible from the tagged commit with <code>make results</code>; G2 freeze artefacts exist (ps_v1 tag, lockbox-rehearsal hashes, frozen benchmark hash).</div>
+
+<h2>2. Must-have features</h2>
+<h3>2.1 Farmer flow</h3>
+<table>
+<tr><th>#</th><th>Feature</th><th>Source</th></tr>
+<tr><td>C1</td><td>Inbound text: EN / Roman Urdu / Urdu script / mixed</td><td>D9, D11</td></tr>
+<tr><td>C2</td><td>Inbound Urdu voice notes: in-turn download → silence/length pre-checks → STT (Scribe v2 → fallback) → same pipeline</td><td>D10, R-02, R-24</td></tr>
+<tr><td>C3</td><td>Turn assembly: 1.5 s debounce + supersede-before-send</td><td>R-01</td></tr>
+<tr><td>C4</td><td>Intents PRICE_NOW, FORECAST (F1), WHERE_TO_SELL (F2), ALERT, STOP, HELP; OUTLOOK answered with "FYP-II mein" unless S3 dev skill &gt; 0</td><td>D9, R-16</td></tr>
+<tr><td>C5</td><td>Crop and place resolution (aliases, Urdu script, Punjabi, fuzzy with echo, OUT_OF_COVERAGE); quantity/unit/number-word normalisation; "bori" always asked</td><td>D5, R-03, R-19</td></tr>
+<tr><td>C6</td><td>Rule-based parser first; one LLM turn with deterministic tools when needed; scope guard</td><td>D9, R-05</td></tr>
+<tr><td>C7</td><td>Template-rendered facts; validator (digits, number words, promise/advice words); template-only fallback</td><td>R-06</td></tr>
+<tr><td>C8</td><td>Price now with date, source, staleness ⚠</td><td>R-08</td></tr>
+<tr><td>C9</td><td>F1 range from the stored daily run; coverage gate ("andaza nahi")</td><td>D6, R-07</td></tr>
+<tr><td>C10</td><td>F2 top 3 with net rupees, gain over nearest, printed cost assumptions, P10 risk rule</td><td>D8, R-11, R-12</td></tr>
+<tr><td>C11</td><td>Follow-ups: crop switch, place add, quantity correction, "N number wali" with mandi echo, horizon change</td><td>D13, R-04</td></tr>
+<tr><td>C12</td><td>Voice echo: quantity always echoed; implausible or non-exact voice slots echo-confirmed</td><td>R-03</td></tr>
+<tr><td>C13</td><td>Threshold alert: opt-in confirmation, hysteresis, caps, template outside window, STOP deletes</td><td>D14, R-21, R-22</td></tr>
+<tr><td>C14</td><td>Consent and AI disclosure on first contact; language mirroring</td><td>D11, D16</td></tr>
+</table>
+<h3>2.2 Data and research</h3>
+<table>
+<tr><th>#</th><th>Feature</th></tr>
+<tr><td>R1</td><td>Synthetic data generator (seeded; spec in file 03 §9) + loader with unit tests; real-data loader contract test</td></tr>
+<tr><td>R2</td><td>Name matching ≥ 95% on injected spelling variants; real Punjab mandi names and coordinates; gazetteers</td></tr>
+<tr><td>R3</td><td>Timing rules T1–T8 with leakage tests L1–L6 in CI; lockbox procedure rehearsed on a synthetic holdout</td></tr>
+<tr><td>R4</td><td>Daily batch on the VM: synthetic daily increment → ingest → QC → data_health → features → F1 scoring of eligible series</td></tr>
+<tr><td>R5</td><td>Results E1 (realism check + QC recall), E2 (F1 baselines), E3 (F1 LightGBM v0, dev folds, SYN and SYN-NULL), E4 (F3 baselines + QR v0), E5 (F2 backtest v0), E6 (parser/STT benchmark)</td></tr>
+<tr><td>R6</td><td>ps_v1 parameters and S1–S5 criteria frozen at G2 (frozen before any real data is seen)</td></tr>
+</table>
+<h3>2.3 Platform (kept minimal)</h3>
+<table>
+<tr><th>#</th><th>Feature</th></tr>
+<tr><td>P1</td><td>Webhook verify → idempotent insert → Postgres job (one transaction) → 200</td></tr>
+<tr><td>P2</td><td>Per-farmer serialised worker; retries; dead-letter; LLM timeout budget and rule-only fallback on 429</td></tr>
+<tr><td>P3</td><td>One image, three roles, Docker Compose on one VM with HTTPS</td></tr>
+<tr><td>P4</td><td>Secrets in env only; gitleaks in CI; numbers hashed in logs and masked in prompts</td></tr>
+<tr><td>P5</td><td>Structured logs with run_id and tool payload per reply (replay possible)</td></tr>
+<tr><td>P6</td><td><code>price_alert</code> and <code>daily_rates</code> templates submitted on Day 1</td></tr>
+</table>
+
+<h2>3. Excluded features</h2>
+<table>
+<tr><th>Feature</th><th>Deferred to</th><th>Reason</th></tr>
+<tr><td>Harvest outlook (F3) inside the bot</td><td>FYP-II S3</td><td>F3 needs the monthly design and a skill check; FYP-I shows F3 baselines offline only</td></tr>
+<tr><td>Daily digests</td><td>FYP-II S4</td><td>Template cost and category unknown; threshold alerts prove the mechanism</td></tr>
+<tr><td>Real (fresh-SIM) number, user test</td><td>FYP-II S1 / S7</td><td>Not needed for the jury; consent and real-user vendor rules must be in place first</td></tr>
+<tr><td>Paid LLM / real farmer data</td><td>FYP-II (if approved)</td><td>FYP-I uses team phones only (R-23)</td></tr>
+<tr><td>Voice replies (TTS)</td><td>FYP-II (conditional)</td><td>Text replies are the decided output (D11)</td></tr>
+<tr><td>Weather and arrivals features in F1; reason codes v1</td><td>FYP-II S2–S3</td><td>F1 v0 must first be compared with baselines</td></tr>
+<tr><td>Trader-confirmed F2 costs; [Transport badlein] flow</td><td>FYP-II S4</td><td>Needs R7 interviews; FYP-I prints the assumptions</td></tr>
+<tr><td>Location request message, sending mandi location pins</td><td>FYP-II</td><td>Inbound pins are enough to prove the origin flow</td></tr>
+<tr><td>Admin dashboard beyond one read-only page</td><td>FYP-II</td><td>Results slides suffice for the jury</td></tr>
+<tr><td>Crops other than onion, tomato, potato; provinces other than Punjab</td><td>Conditional (data)</td><td>Out-of-coverage reply instead</td></tr>
+<tr><td>Multi-tenant RLS, microservices, Redis, vector DB, agent framework, carousels, images</td><td>Not planned</td><td>RFC §1</td></tr>
+<tr><td>Real price data (co-supervisor export / AMIS)</td><td>FYP-II S1</td><td>A1: the original data is provided in FYP-II; FYP-I runs on synthetic data</td></tr>
+<tr><td>Opening the lockbox</td><td>FYP-II S8</td><td>Pre-registration</td></tr>
+</table>
+
+<h2>4. Demo data requirements</h2>
+<ul>
+<li><b>S-DEMO</b> snapshot of the synthetic dataset after the generated load of <b>Fri 11 Dec 2026</b>, forecast run <b>R-20261211</b>, tagged and restorable in &lt; 2 min (file 03 §7).</li>
+<li>Coverage: onion, tomato, potato, each with ≥ 5 eligible Punjab mandis including Lahore, Okara and Sahiwal; distances cached for origins Okara, Sahiwal, Kasur, Lahore; ps_v1 cost parameters.</li>
+<li><b>Golden answers</b> (<code>demo/golden/*.json</code>) computed offline by <code>scripts/expected_answers.py</code> from S-DEMO: the latest rate, F1 range and F2 ranking (or the "nearest is fine" outcome) for each scenario. Expected values are therefore whatever the frozen engine produces; success is judged on exact equality of facts, not on any hoped-for number.</li>
+<li>Every rate shown carries the source name "Demo data (synthetic)".</li>
+<li>One prepared "next-day" price row for scenario 4, loaded through the normal batch path by <code>demo_trigger_alert.sh</code>.</li>
+<li>5 allowlisted phones: Taha, Ashna, Umar, supervisor, one jury member (registered the day before).</li>
+<li>Benchmark set (file 05 §4) as the test bed: 40 text, 30 voice + 5 controls, 30 multi-turn/commands.</li>
+</ul>
+
+<h2>5. Exact 5 demo scenarios</h2>
+<h3>Scenario 1: Price now (Roman Urdu text, Taha's phone)</h3>
+<table>
+<tr><td style="width:18%"><b>Start</b></td><td>First contact. "Assalam o alaikum, Lahore mein pyaz ka aaj ka rate kya hai?"</td></tr>
+<tr><td><b>Expected behaviour</b></td><td>Consent + disclosure message, then: intent PRICE_NOW, crop ONION (alias), place Lahore → canonical mandi named → C8 latest non-SUSPECT rate → template</td></tr>
+<tr><td><b>Expected WhatsApp result</b></td><td>"🧅 Pyaz · Lahore (&lt;mandi&gt;) · Rs X–Y fi mann (40 kg) · 11 Dec · Demo data (synthetic)" + buttons [Agle din ka andaza] [Kahan bechoon?] [Alert lagayein]</td></tr>
+<tr><td><b>Success</b></td><td>X, Y, date, mandi and source equal <code>golden/s1.json</code>; consent shown once; first reply ≤ 7 s; no LLM-written number</td></tr>
+</table>
+<h3>Scenario 2: Where to sell (Urdu voice note ~8 s, Ashna's phone)</h3>
+<table>
+<tr><td style="width:18%"><b>Start</b></td><td>♪ "Mere paas pachaas mann pyaz hai, Okara mein. Kahan bechoon?"</td></tr>
+<tr><td><b>Expected behaviour</b></td><td>In-turn STT → same pipeline → WHERE_TO_SELL; ONION; origin Okara; 50 mann = 2,000 kg (echoed); C10 over R-20261211 forecasts for eligible mandis ≤ 150 km; P10 risk rule</td></tr>
+<tr><td><b>Expected WhatsApp result</b></td><td>Echo "Pyaz · 50 mann · Okara se" + top-3 lines (range, net rupees) + gain over nearest + cost assumptions line; or the "Nazdeeki mandi theek hai" template, whichever the golden file holds</td></tr>
+<tr><td><b>Success</b></td><td>Transcript critical slots correct (crop, place, quantity); mandi set, order, ranges and net totals equal <code>golden/s2.json</code>; reply ≤ 10 s from receipt; Roman Urdu reply</td></tr>
+</table>
+<h3>Scenario 3: Follow-ups (continues scenario 2, Ashna's phone)</h3>
+<table>
+<tr><td style="width:18%"><b>3a</b></td><td>"Aur tamatar?" → crop switch; origin and quantity kept → F2 for tomato → equals <code>golden/s3a.json</code></td></tr>
+<tr><td><b>3b</b></td><td>"2 number wali mandi ka agle hafte ka andaza?" → position 2 of the 3a list → mandi name echoed → F1 range (h = 1–7) from R-20261211, "andaza" word, or "andaza nahi" if that series is not eligible → equals <code>golden/s3b.json</code></td></tr>
+<tr><td><b>3c</b></td><td>"Nahi, 100 bori hain" → bori weight asked [50 kg] [100 kg] [Doosra] → tap 50 kg → 5,000 kg = 125 mann echoed → F2 re-run → equals <code>golden/s3c.json</code></td></tr>
+<tr><td><b>Success</b></td><td>3a keeps origin/quantity; 3b targets the mandi at position 2 and echoes it; 3c never assumes the bag weight; all facts template-rendered and golden-matched</td></tr>
+</table>
+<h3>Scenario 4: Price alert (Umar's phone)</h3>
+<table>
+<tr><td style="width:18%"><b>Start</b></td><td>"Jab Lahore mein tamatar 2500 se upar jaye to mujhe batana"</td></tr>
+<tr><td><b>Expected</b></td><td>Confirmation "Tamatar · Lahore · Rs 2,500 fi mann se upar: alert lagayein? [Haan] [Nahi]" → Haan → subscription armed → operator runs <code>demo_trigger_alert.sh</code> (next-day row crosses 2,500, through ingest → QC → C14) → one alert message (inside the window) with the new rate and date → trigger again the same day → no second message → "STOP" → confirmation; subscription and user data removed</td></tr>
+<tr><td><b>Success</b></td><td>Exactly 1 alert delivered; 0 duplicates; the alert's numbers equal the loaded row; after STOP no rows remain for that user except the anonymous count</td></tr>
+</table>
+<h3>Scenario 5: Honesty and guardrails (supervisor's or jury phone)</h3>
+<table>
+<tr><td style="width:18%"><b>5a</b></td><td>"Multan mein kapas ka rate?" → crop out of coverage → "Abhi sirf pyaz, tamatar, aloo…" (no number)</td></tr>
+<tr><td><b>5b</b></td><td>"Hyderabad mein pyaz?" → OUT_OF_COVERAGE province message</td></tr>
+<tr><td><b>5c</b></td><td>"Fertilizer kab daalun?" → scope redirect (no advice)</td></tr>
+<tr><td><b>5d</b></td><td>Forecast for a mandi that is not eligible (from the golden list of uncovered series) → "Is mandi ka andaza dene ke liye data kaafi nahi" + latest rate with date</td></tr>
+<tr><td><b>5e</b></td><td>A 3-second silent voice note → "Awaaz nahi aayi, dobara bhejein" with no STT call logged</td></tr>
+<tr><td><b>Success</b></td><td>0 numbers not from tools; 0 forecasts for uncovered series; 0 advice outside scope; message_log shows no STT call for 5e</td></tr>
+</table>
+
+<h2>6. Success criteria (measurable)</h2>
+<table>
+<tr><th>Area</th><th>Metric</th><th>Pass threshold</th><th>Measured on</th></tr>
+<tr><td>Text understanding</td><td>Intent / critical-slot exact match (crop, place, quantity + unit)</td><td>≥ 95% / ≥ 95%</td><td>40 benchmark texts</td></tr>
+<tr><td>Voice transcription</td><td>Notes with all critical slots correctly transcribed</td><td>≥ 85% (≥ 90% quiet)</td><td>30 voice notes</td></tr>
+<tr><td>Voice end-to-end</td><td>Critical-slot exact match from voice</td><td>≥ 90%</td><td>30 voice notes</td></tr>
+<tr><td>Hallucination controls</td><td>Silence / music controls producing a request</td><td>0</td><td>5 controls</td></tr>
+<tr><td>Clarification</td><td>Asked on designed-ambiguous items / unnecessary on clear items</td><td>≥ 90% / ≤ 10%</td><td>Ambiguous subset</td></tr>
+<tr><td>Place resolution</td><td>Exact aliases correct / ambiguous cases ask / non-exact echoed</td><td>100% / 100% / 100%</td><td>Alias test list</td></tr>
+<tr><td>Grounding</td><td>Numbers in replies not present in a tool result</td><td>0</td><td>All runs; validator logs + manual review</td></tr>
+<tr><td>Coverage</td><td>Forecasts sent for uncovered series</td><td>0</td><td>All runs</td></tr>
+<tr><td>Follow-ups</td><td>Correct target on follow-up turns</td><td>≥ 90%</td><td>20 multi-turn items</td></tr>
+<tr><td>Alerts</td><td>Duplicate alerts / alerts from SUSPECT rows</td><td>0 / 0</td><td>Alert tests + scenario 4</td></tr>
+<tr><td>Latency</td><td>Text p50 / p90; voice (≤ 30 s) p50 / p90</td><td>≤ 4 s / ≤ 7 s; ≤ 7 s / ≤ 10 s</td><td>All runs</td></tr>
+<tr><td>Research validity</td><td>Leakage tests L1–L6; rehearsal hashes unchanged; results reproducible</td><td>All pass</td><td>CI + <code>make results</code></td></tr>
+<tr><td>First results</td><td>E1–E6 exist with the frozen ps_v1</td><td>All present; F1 beats naive on SYN and does not on SYN-NULL (pipeline check); values reported as they are</td><td>results/</td></tr>
+<tr><td>Demo readiness</td><td>All 5 scenarios pass</td><td>3 consecutive rehearsals, Android + iPhone</td><td>Rehearsals</td></tr>
+</table>
+
+<h2>7. FYP-I scope risks</h2>
+<table>
+<tr><th>Risk</th><th>Likelihood</th><th>Effect</th><th>Mitigation already in scope</th></tr>
+<tr><td>Jury asks "is this real data?"</td><td>High</td><td>Credibility of results</td><td>Say so up front: synthetic by design (A1); show the generator spec, the SYN-NULL check and the FYP-II real-data plan</td></tr>
+<tr><td>Synthetic data too clean</td><td>Medium</td><td>Results flatter the model</td><td>Realism check vs plausibility ranges; shocks, gaps and outliers injected; SYN-NULL variant; no real-market claims</td></tr>
+<tr><td>STT misses threshold on Punjabi-accented notes</td><td>Medium</td><td>Scenario 2 fragile</td><td>Benchmark Day 15; fallback STT; always-on echo</td></tr>
+<tr><td>Gemini free-tier rate limit during the demo</td><td>Low–Medium</td><td>Messy messages fail</td><td>Rule parser handles scripted paths; rule-only switch</td></tr>
+<tr><td>F1 v0 does not beat naive on dev folds</td><td>Medium</td><td>Weak results slide</td><td>Valid-null wording; the system still serves naive-anchored ranges honestly</td></tr>
+<tr><td>Template not approved</td><td>Low–Medium</td><td>Alert outside window fails</td><td>Demo alert happens inside the window</td></tr>
+<tr><td>Jury cannot message the bot</td><td>High if unmanaged</td><td>Live moment fails</td><td>Spare phone OTP-registered the day before; recording</td></tr>
+<tr><td>Documents (SRS/SDS/report) crowd out engineering in week 4</td><td>High</td><td>Rehearsals skipped</td><td>Drafts exist in plan2/docs; owners update from the RFC on Days 16–19</td></tr>
+</table>
+
+<h2>8. Features to cut first if behind schedule</h2>
+<p>Cut in this order. <b>Never cut:</b> template-rendered facts + validator + unknown path; coverage gate; leakage tests + sealed lockbox; F2 risk rule; signature check + idempotent webhooks; consent + STOP; date and source on every rate.</p>
+<table>
+<tr><th>Order</th><th>Cut</th><th>Fallback behaviour</th></tr>
+<tr><td>1</td><td>Read-only admin view (C17)</td><td>Results slides only</td></tr>
+<tr><td>2</td><td>SARIMA comparison (E3b)</td><td>Baselines + LightGBM only</td></tr>
+<tr><td>3</td><td>Typed Urdu-script replies</td><td>Reply in Roman Urdu to Urdu-script input</td></tr>
+<tr><td>4</td><td>Location pin as origin</td><td>Place names only</td></tr>
+<tr><td>5</td><td>Debounce (R-01)</td><td>Keep supersede-before-send only</td></tr>
+<tr><td>6</td><td>F3 QR v0 (E4 model part)</td><td>Show climatology and last-year baselines only</td></tr>
+<tr><td>7</td><td>Live alert trigger in the demo</td><td>Show the stored subscription + recorded alert video; alert tests stay</td></tr>
+<tr><td>8</td><td>LLM turn</td><td>Rule-based parser only; messy messages get a clarification</td></tr>
+<tr><td>9</td><td>Voice notes</td><td>Text only; voice shown in the recording and the STT benchmark results</td></tr>
+<tr><td>10</td><td>Real-data loader contract test</td><td>Loader written in FYP-II S1</td></tr>
+</table>
+</body></html>

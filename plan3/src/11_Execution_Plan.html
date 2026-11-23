@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>11 Execution Plan</title><link rel="stylesheet" href="style.css">
+<style>table.tasks th:nth-child(1){width:6%}table.tasks th:nth-child(2){width:40%}table.tasks th:nth-child(3){width:7%}table.tasks th:nth-child(4){width:10%}table.tasks th:nth-child(5){width:29%}table.tasks th:nth-child(6){width:8%}</style></head><body>
+
+<h1>MandiSaathi: FYP-I Execution Plan (v1.0) + FYP-II Sprints</h1>
+<div class="sub">Boundary: RFC v1.0 + red-team amendments + amendment A1 (synthetic data in FYP-I) + FYP-I Scope v1.0. Nothing outside the scope is planned.</div>
+<div class="meta">Plan pack 3 · File 11 · 22 Nov 2026 · Calendar: 20 working days (W1 = Day 1–5, 23–27 Nov · W2 = Day 6–10, 30 Nov–4 Dec · W3 = Day 11–15, 7–11 Dec · W4 = Day 16–20, 14–18 Dec) + evaluation week 21–23 Dec <span class="tag a">ASSUMPTION</span> · Every DONE condition is binary</div>
+
+<p><b>Team tracks</b></p>
+<ul>
+<li><b>Taha (T), "Data &amp; Forecasting"</b>: repo/CI, synthetic data generator + loader, schema, realism check, features, leakage tests, F1, batch pipeline, price service, S-DEMO, SRS.</li>
+<li><b>Ashna (A), "Language &amp; Evaluation"</b>: gazetteers, normalisers, resolver, rule parser, LLM turn engine, follow-ups, guardrails, benchmark, evaluation harness, lockbox, F3, FYP-I report.</li>
+<li><b>Umar (U), "Platform &amp; Channels"</b>: Meta app, VM, webhook, queue, gateway, orchestrator, state, renderer + validator, STT, turn assembly, alerts, F2 engine, SDS.</li>
+</ul>
+<table>
+<tr><th>Tag</th><th>Meaning</th></tr>
+<tr><td><span class="tag crit">CRIT</span></td><td>Another major task depends on it (critical path)</td></tr>
+<tr><td><span class="tag par">PAR</span></td><td>Parallel; needed for FYP-I but not blocking others</td></tr>
+<tr><td><span class="tag opt">OPT</span></td><td>Optional; first to drop (file 10 §8)</td></tr>
+</table>
+
+<h2>1. Four-week overview</h2>
+<table>
+<tr><th>Week</th><th>Goal</th><th>Exit gate</th></tr>
+<tr><td>W1: Foundation</td><td>A real WhatsApp message travels webhook → DB → queue → worker → reply; voice audio downloaded; synthetic price data loading with unit tests; harness skeleton; lockbox procedure; templates submitted</td><td>M1</td></tr>
+<tr><td>W2: Understanding + data freeze</td><td>Gazetteers, normalisers, resolver, rule parser, state, STT, renderer + validator; price-now end to end; realism check; benchmark frozen; pre-registration freeze</td><td>M2 (G1 + G2)</td></tr>
+<tr><td>W3: Models + core answers</td><td>F1 v0, F2 engine + backtest, F3 baselines; batch on the VM; LLM turn; forecast + where-to-sell + voice end to end; follow-ups; S-DEMO frozen</td><td>M3 (G3), M4</td></tr>
+<tr><td>W4: Reliability, documents, rehearsal</td><td>Alerts, guardrails, failure paths, security checklist, benchmark run #2, SRS/SDS/report, demo freeze, rehearsals</td><td>M5, M6</td></tr>
+</table>
+
+<h2>2. Week 1: daily plan (Foundation)</h2>
+<div class="day">Day 1 · Mon 23 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>1.1</td><td>Meta business portfolio + developer app (Business, WhatsApp use case) → test WABA + test number; OTP-register Taha, Ashna, Umar phones</td><td>U</td><td>–</td><td><code>hello_world</code> received on all 3 phones</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>1.2</td><td>System user + permanent token in <code>.env</code> only; gitleaks in CI; diary the token expiry</td><td>U</td><td>1.1, 1.4</td><td>An API call with the stored token succeeds; CI secret scan runs</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>1.3</td><td>Submit templates <code>price_alert</code> and <code>daily_rates</code> (Urdu + English)</td><td>U</td><td>1.1</td><td>Status PENDING or APPROVED; assigned category logged in DECISIONS.md</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>1.4</td><td>Repo layout: <code>mandi/{ingest,features,models,decide}</code>, <code>app/</code>, <code>params/</code>, <code>tests/</code>, <code>scripts/</code>; one Dockerfile, roles web/worker/batch; CI (lint, unit tests, image build)</td><td>T</td><td>–</td><td>CI green; all 3 roles start from the same image</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>1.5</td><td>Record the 18 Nov meeting outcome and amendment A1 (synthetic data in FYP-I, real data in FYP-II) as D-004+; send the co-supervisor the real-data format request for FYP-II delivery</td><td>T</td><td>–</td><td>Entries in DECISIONS.md; request sent</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>1.6</td><td>Benchmark spec (label schema, item matrix per file 05 §4); recruit ≥ 6 speakers incl. Punjabi-accented</td><td>A</td><td>–</td><td>Spec committed; speakers named</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>1.7</td><td>Literature review started: ≥ 15 papers in 4 themes (deadline Day 8)</td><td>A</td><td>–</td><td>Annotated table started with ≥ 5 rows</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+<div class="day">Day 2 · Tue 24 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>2.1</td><td>VM: Docker, Caddy HTTPS (sslip.io), Postgres container, <code>/health</code></td><td>U</td><td>1.4</td><td><code>/health</code> over HTTPS returns 200 and reports DB reachable</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>2.2</td><td>Webhook: GET verify handshake + POST <code>X-Hub-Signature-256</code> check</td><td>U</td><td>2.1, 1.2</td><td>Meta dashboard verifies the URL; unsigned/bad POST → 401</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>2.3</td><td>Schema v1 migrations: reference, prices, model outputs, coverage, data_health, infra tables (RFC §8)</td><td>T</td><td>1.4</td><td>Migrations apply on an empty DB and re-run idempotently</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>2.4</td><td>Synthetic data spec <code>data/synthetic/spec.yaml</code> (file 03 §9): crops, real mandi list + coordinates, period, price components, seasonal calendars, defects to inject, plausibility ranges with sources</td><td>T</td><td>–</td><td>Spec committed and reviewed by a second member</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>2.5</td><td>Lockbox procedure + sealing script (sha256 into DECISIONS.md) + CI check that no code path reads the sealed folder</td><td>A</td><td>1.4</td><td>Test passes; procedure committed</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 3 · Wed 25 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>3.1</td><td>Idempotent ingest: <code>inbound_event</code> (unique WAMID / status key) + job in one transaction → 200</td><td>U</td><td>2.2, 2.3</td><td>Posting the same payload twice → exactly 1 event and 1 job</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>3.2</td><td>Generator v1 (<code>scripts/make_synthetic.py --seed</code>) + loader → <code>price_obs</code> (source SYN); <code>reported_at</code> rule; unit tests with known rows</td><td>T</td><td>2.3, 2.4</td><td>Same seed → identical file hash; loader tests pass; a per-40 kg row converts × 2.5 exactly</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>3.3</td><td>Real-data loader contract: a 5-row hand-made file in the requested export format passes the loader interface (FYP-II then only adds a parser)</td><td>T</td><td>3.2</td><td>Contract test passes</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>3.4</td><td>Evaluation harness: rolling-origin folds, MAE / MASE / pinball / coverage, block bootstrap; planted-signal fixture L6</td><td>A</td><td>1.4</td><td>Unit tests on synthetic data pass; L6 signal is learned</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 4 · Thu 26 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>4.1</td><td>Worker runtime: SKIP LOCKED claim, per-farmer advisory lock, delayed jobs, retries + backoff, dead-letter</td><td>U</td><td>3.1</td><td>Tests: 2 jobs of one farmer never run concurrently; a failing job dead-letters after max attempts</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>4.2</td><td>Name matching on the generator's injected spelling variants → <code>mandi_id</code></td><td>T</td><td>3.2</td><td>≥ 95% of variant rows matched; unmatched list reviewed by a second member</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>4.3</td><td>Crop + place gazetteer v0: 4 crops; Punjab mandis/districts with lat/lon; aliases incl. Urdu script, Punjabi, spelling and STT variants; alias test list</td><td>A</td><td>–</td><td>Gazetteer loads; alias test list (≥ 60 cases) committed</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>4.4</td><td>Benchmark texts (40) with gold JSON (deadline Day 9)</td><td>A</td><td>1.6</td><td>≥ 20 items committed today</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+<div class="day">Day 5 · Fri 27 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>5.1</td><td>WhatsApp gateway adapter: text / buttons / list / location / template; mark-read + typing; outbound log; status webhooks (forward-only); temporary echo bot</td><td>U</td><td>4.1</td><td>Echo reply on all 3 phones; sent → delivered → read recorded</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>5.2</td><td>Audio download path: media ID → temp file within 5 min; re-query on expiry</td><td>U</td><td>5.1</td><td>A voice note from a team phone is stored; forced-expiry test re-queries and succeeds</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>5.3</td><td>Realism check E1 v0: levels vs plausibility ranges, seasonal shape per crop, gaps, thin series; QC recall on injected outliers and unit errors</td><td>T</td><td>4.2</td><td>Tables + 4 charts in results/E1; QC flags 100% of injected defects</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>5.4</td><td>Normalisers: quantity, unit, number words, dates (PKT); table-driven tests</td><td>A</td><td>4.3</td><td>≥ 80 tests pass at 100%</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>5.5</td><td>M1 smoke test (§8)</td><td>All</td><td>5.1–5.4, 3.2</td><td>M1 passes</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+
+<h2>3. Week 2: daily plan (Understanding + data freeze)</h2>
+<div class="day">Day 6 · Mon 30 Nov</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>6.1</td><td>Crop/place resolver: alias exact → fuzzy (≥ 0.85, margin ≥ 0.15) → candidates; RESOLVED / AMBIGUOUS / UNKNOWN / OUT_OF_COVERAGE; pin → nearest district</td><td>A</td><td>4.3</td><td>Alias list: exact 100% correct; designed-ambiguous 100% AMBIGUOUS; "Hyderabad" → OUT_OF_COVERAGE</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>6.2</td><td>Orchestrator skeleton: consent gate, coalescing in timestamp order, state load/save, STOP</td><td>U</td><td>5.1</td><td>First message → consent text; 3 pending messages → 1 turn; STOP deletes the user</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>6.3</td><td>Feature builder FS-S under T1–T5; leakage tests L1–L5</td><td>T</td><td>4.2, 3.4</td><td>L1–L5 pass in CI</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>6.4</td><td>Voice recordings: 30 notes + 5 controls recorded inside WhatsApp and pulled through the real webhook path; gold transcripts (deadline Day 9)</td><td>A</td><td>5.2, 1.6</td><td>≥ 10 notes stored with gold today</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+<div class="day">Day 7 · Tue 1 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>7.1</td><td>Rule-based parser: intents PRICE_NOW / FORECAST / WHERE_TO_SELL / OUTLOOK / ALERT / STOP / HELP / OTHER + slots via 6.1 and 5.4</td><td>A</td><td>6.1, 5.4</td><td>Scored on the benchmark texts committed so far; numbers logged as the D9 baseline</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>7.2</td><td>Query state manager: patches set / add / clear, provenance, answer_shown positions + run_id, pending clarification, expiry</td><td>U</td><td>6.2</td><td>Unit tests: crop switch, place add, quantity correction, position reference, 24 h expiry: all pass</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>7.3</td><td>F1 baselines E2 (B-N, B-SN, B-SR) on development folds</td><td>T</td><td>6.3, 3.4</td><td><code>results/E2.csv</code> by crop × horizon</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 8 · Wed 2 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>8.1</td><td>Speech service: duration + silence/energy pre-checks, Scribe v2 with gazetteer keyterms, fallback chain, sanity checks, stt_meta</td><td>U</td><td>5.2</td><td>A team note → transcript stored; a forced primary error uses the fallback; a silent control → "dobara bhejein" with <b>no</b> STT call</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>8.2</td><td>Price service (latest non-SUSPECT rate, staleness flag) + <code>series_coverage</code> refresh</td><td>T</td><td>4.2</td><td>Tests: SUSPECT row excluded; stale flag after 2 trading days; eligibility per file 03 §6</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>8.3</td><td><code>params/ps_v1.yaml</code> draft: thresholds, costs, S1–S5, valid-null wording</td><td>A</td><td>–</td><td>Reviewed by all three members</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>8.4</td><td>Literature review complete</td><td>A</td><td>1.7</td><td>≥ 15 annotated papers; comparison table incl. Namal FYP and Zarai Mandi</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+<div class="day">Day 9 · Thu 3 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>9.1</td><td>Renderer + grounding validator: templates (price now, F1, F2, clarifications, out-of-scope, consent) in Roman Urdu / Urdu / English; validator for digits, number words, unknown mandi names, promise/advice words; regenerate-once → template-only</td><td>U</td><td>8.2, 7.1, 5.4</td><td>Tests: injected wrong number, number word ("teen hazaar"), unknown mandi or "pakka" → rejected; template-only fallback sent</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>9.2</td><td>Realism check E1 final (shown to the supervisor) + crop list proposal</td><td>T</td><td>5.3</td><td>Report committed; G1 inputs ready</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>9.3</td><td>Lockbox rehearsal: generate the synthetic holdout year and the SYN-NULL variant; seal both with the 2.5 procedure (the real lockbox is sealed on arrival in FYP-II S1)</td><td>T</td><td>3.2, 2.5</td><td>Hashes recorded in DECISIONS.md; CI read-guard test passes</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>9.4</td><td>Benchmark freeze: 40 text + 30 voice + 5 controls + 30 multi-turn/commands with gold</td><td>A</td><td>4.4, 6.4</td><td>Files + gold committed; hash in DECISIONS.md</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 10 · Fri 4 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>10.1</td><td>PRICE_NOW end to end: parser → state → price service → renderer → gateway</td><td>U</td><td>9.1, 8.2, 7.2</td><td>Scenario 1 passes on a team phone on live data, ≤ 7 s</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>10.2</td><td><b>Gate G1</b>: realism check passed; crop list frozen; real-data format request acknowledged or chased</td><td>All</td><td>9.2</td><td>G1 recorded in DECISIONS.md</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>10.3</td><td><b>Gate G2 freeze</b>: ps_v1 tagged; T1–T8 with L1–L6 passing; lockbox procedure rehearsed; generator spec + seed frozen; benchmark frozen; S1–S5 written (all before any real data is seen)</td><td>All</td><td>8.3, 9.3, 9.4, 6.3</td><td>Git tag <code>ps_v1</code> exists; all freeze artefacts present</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>10.4</td><td>F3 data: monthly panel from the generator; climatology B-C and last-year B-LY scores</td><td>A</td><td>3.2, 3.4</td><td>Panel built; baseline table for 2016–2025</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+
+<h2>4. Week 3: daily plan (Models + core answers)</h2>
+<div class="day">Day 11 · Mon 7 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>11.1</td><td>F1 LightGBM quantile v0 (E3) on development folds + split-conformal ranges, on SYN and SYN-NULL</td><td>T</td><td>7.3, 10.3</td><td><code>results/E3.csv</code>: MASE, pinball, coverage by crop × horizon; beats naive on SYN, does <b>not</b> on SYN-NULL (else: leakage hunt before anything else)</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>11.2</td><td>AI turn engine: model adapter (Gemini free), intent-scoped strict tools, ≤ 3 iterations, 8 s / 12 s budget, rule-only on 429, scope guard</td><td>A</td><td>7.1, 9.1</td><td>Test turn calls a stub tool; forced timeout → rule fallback; off-topic → redirect template</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>11.3</td><td>F2 engine v0 (net revenue, 150 km candidates, P10 risk rule) + OSRM distance cache for Okara, Sahiwal, Kasur, Lahore</td><td>U</td><td>2.3, 4.2</td><td>Unit tests on fixture forecasts: risk rule returns "nearest" when the gain is inside the noise; distances cached</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 12 · Tue 8 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>12.1</td><td>Batch pipeline (C13) on the VM: synthetic daily increment (<code>make_synthetic.py --day</code>) → ingest → QC → data_health → features → F1 score eligible series → <code>forecast(run_id)</code></td><td>T</td><td>11.1, 8.2</td><td>A run completes in &lt; 10 min; rows only for eligible series; data_health row written</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>12.2</td><td>F2 backtest E5: PROP vs NEAREST vs YESTERDAY-BEST + sensitivity (transport ± 50%, commission 4–8%, spoilage × 0.5–2)</td><td>U</td><td>11.3, 7.3</td><td><code>results/E5.csv</code> with bootstrap CIs</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>12.3</td><td>F3 quantile regression v0 (E4) vs B-C; power note for the monthly design</td><td>A</td><td>10.4</td><td>Skill table with bootstrap CIs; power note committed</td><td><span class="tag par">PAR</span></td></tr>
+</table>
+<div class="day">Day 13 · Wed 9 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>13.1</td><td>FORECAST + WHERE_TO_SELL wired: parser/LLM → forecast reader (coverage gate) / F2 engine → renderer</td><td>A</td><td>11.2, 12.1, 11.3</td><td>Text versions of scenarios 2 and 3b pass on a team phone</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>13.2</td><td>Voice end to end: in-turn STT → same pipeline; quantity echo; plausibility echo-confirm</td><td>U</td><td>8.1, 13.1</td><td>Scenario 2 passes by voice from Ashna's phone, ≤ 10 s</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>13.3</td><td>SARIMA comparison on the 20 longest series (E3b)</td><td>T</td><td>11.1</td><td>Table in results/E3b</td><td><span class="tag opt">OPT</span></td></tr>
+<tr><td>13.4</td><td><b>Gate G3</b>: E2–E5 reproducible from the commit</td><td>All</td><td>7.3, 11.1, 12.2, 12.3</td><td><code>make results</code> regenerates every CSV identically</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 14 · Thu 10 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>14.1</td><td>Turn assembly: 1.5 s text debounce (cap 4 s) + supersede-before-send; voice-before-text ordering in the turn</td><td>U</td><td>13.2</td><td>Tests: 3-message burst → 1 reply reflecting all 3; voice then quick text → final state reflects the text</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>14.2</td><td>Follow-ups: crop switch, place add, position refs with mandi echo, cross-answer ambiguity question, bori clarification buttons</td><td>A</td><td>7.2, 13.1</td><td>Scenario 3 (3a–3c) passes on live data</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>14.3</td><td>S-DEMO preparation: coverage check (3 crops, ≥ 5 mandis incl. Lahore/Okara/Sahiwal), distance cache, <code>demo_reset.sh</code></td><td>T</td><td>12.1</td><td>Reset restores a copy in &lt; 2 min; coverage check passes</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 15 · Fri 11 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>15.1</td><td>S-DEMO freeze after the 11 Dec load: run R-20261211; dump tagged; <code>expected_answers.py</code> → golden files for all scenarios</td><td>T</td><td>14.3</td><td>Golden JSON for scenarios 1–5 committed; dump hash recorded</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>15.2</td><td>Alert service (C14): opt-in confirmation, threshold evaluation with 3% hysteresis, caps, budget, template outside window, STOP</td><td>U</td><td>6.2, 12.1, 1.3</td><td>Tests: crossing → 1 alert; second crossing same day → none; SUSPECT row → none; STOP removes; outside window → template path</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>15.3</td><td>Benchmark run #1 (text, voice, multi-turn) on S-DEMO; STT comparison (Scribe v2 / faster-whisper / Gemini) → criterion A; D9 decision rule applied</td><td>A</td><td>13.2, 14.2, 9.4</td><td>Report vs file 05 §5; every failing category has a ticket; D9/D10 picks recorded</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>15.4</td><td><b>M4</b>: scenarios 2 and 3 pass on S-DEMO with golden match</td><td>All</td><td>15.1, 14.1, 14.2</td><td>M4 passes</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+
+<h2>5. Week 4: daily plan (Reliability, documents, rehearsal)</h2>
+<div class="day">Day 16 · Mon 14 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>16.1</td><td>Scenario 4 wiring + <code>demo_trigger_alert.sh</code> (prepared next-day row through the normal batch path)</td><td>U</td><td>15.2</td><td>Scenario 4 passes on S-DEMO</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>16.2</td><td>Guardrail paths: crop/province out of coverage, scope redirect, uncovered series "andaza nahi", silent voice control</td><td>A</td><td>11.2, 8.1</td><td>Scenario 5 (5a–5e) passes</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>16.3</td><td>Data failure paths: batch failure keeps the last run + stale label; SUSPECT exclusion; freshness alarm</td><td>T</td><td>12.1</td><td>Fault-injection tests produce the defined behaviour</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>16.4</td><td>SRS v1.0 updated from the plan2 draft + RFC/red-team changes</td><td>T</td><td>–</td><td>Supervisor review copy sent</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 17 · Tue 15 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>17.1</td><td>Channel failure paths: both STT fail → "likh kar"; send 429/5xx backoff; dead-letter alert; LLM 429 → rule-only</td><td>U</td><td>14.1</td><td>Fault-injection tests produce the defined user message in each case</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>17.2</td><td>Benchmark run #2 + latency p50/p90 + 1–5 rubric on 20 replies (2 raters)</td><td>A</td><td>15.3, 16.2</td><td>All file 10 §6 thresholds met, or the gaps are on the cut list with a recorded decision</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>17.3</td><td>SDS v1.0 updated (architecture, ER, sequences, WhatsApp flows) from the plan2 draft + RFC</td><td>U</td><td>–</td><td>Supervisor review copy sent</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>17.4</td><td>Security/privacy checklist: signature rejection, gitleaks, hashing/masking in logs and prompts, consent/STOP, real-user flag off in the demo env, injection test set</td><td>T</td><td>16.2</td><td>Every item has a passing test or a recorded manual check</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>17.5</td><td><b>M5</b> gate</td><td>All</td><td>16.1, 16.2, 17.2</td><td>M5 passes</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 18 · Wed 16 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>18.1</td><td>FYP-I report: chapters 1–2 (introduction, related work with the comparison table) + method + preliminary results E1–E6</td><td>A</td><td>17.2, 13.4</td><td>Draft in the template</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>18.2</td><td>Demo environment freeze: release tag on S-DEMO; supervisor + jury spare phones OTP-registered; template status confirmed; reset tested</td><td>U</td><td>17.5</td><td>Tag deployed; 5 phones verified; reset &lt; 2 min</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>18.3</td><td>Results slides; read-only admin view (C17)</td><td>T</td><td>13.4</td><td>Slides done; admin page optional</td><td><span class="tag opt">OPT</span></td></tr>
+<tr><td>18.4</td><td>Fallback assets: screen recordings of all 5 scenarios; manual switches tested once (rule-only parser, STT fallback as primary)</td><td>All</td><td>17.5</td><td>Recordings on 2 laptops; each switch tested</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 19 · Thu 17 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>19.1</td><td>Rehearsal #1: all 5 scenarios on Android + iPhone</td><td>All</td><td>18.2</td><td>Pass/fail logged per scenario; defects ticketed</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>19.2</td><td>Fix rehearsal-#1 defects (time-boxed to ½ day; otherwise apply a cut-list item)</td><td>All</td><td>19.1</td><td>Every defect fixed or covered by a cut</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>19.3</td><td>FYP-I report chapters 3–8 (requirements and design summaries, results, plan, FYP-II plan)</td><td>A (+T, U sections)</td><td>18.1</td><td>Full draft</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<div class="day">Day 20 · Fri 18 Dec</div>
+<table class="tasks"><tr><th>ID</th><th>Task</th><th>Owner</th><th>Dependency</th><th>Done condition</th><th>Tag</th></tr>
+<tr><td>20.1</td><td>Rehearsals #2, #3, #4</td><td>All</td><td>19.2</td><td>3 consecutive passes (M6)</td><td><span class="tag crit">CRIT</span></td></tr>
+<tr><td>20.2</td><td>Demo runbook: phone assignments, script, reset steps, fallback triggers ("if X fails → do Y")</td><td>T</td><td>20.1</td><td>Dry run by the presenter</td><td><span class="tag par">PAR</span></td></tr>
+<tr><td>20.3</td><td>Submit report, SRS, SDS per FYP-office rules</td><td>All</td><td>16.4, 17.3, 19.3</td><td>Submission receipt</td><td><span class="tag crit">CRIT</span></td></tr>
+</table>
+<p class="small">Evaluation week (Mon 21 – Wed 23 Dec): demo day; buffer for the jury's requests. Gate G4 = FYP-I passed.</p>
+
+<h2>6. Critical path</h2>
+<pre>1.1 → 1.2 → 2.2 → 3.1 → 4.1 → 5.1 ──► [M1]
+1.4 → 2.3 → 3.2 → 4.2 ─┤
+                        ▼
+        4.3 → 6.1 → 7.1 ─┬─► 9.1 → 10.1 ──► [M2: G1 + G2 (10.3)]
+        5.4 ─────────────┘
+        6.3 → 7.3 → 11.1 → 12.1 ─┬─► 13.1 → 13.2 → 14.1 ──► [M4 (15.4)]
+                 11.3 → 12.2 ─────┤          14.2 ──────────┘
+                                   └─► [M3: G3 (13.4)]
+        14.3 → 15.1 (S-DEMO) ──► 15.2 → 16.1 ──► [M5 (17.5)] → 18.2 → 19.1 → 19.2 → 20.1 ──► [M6]</pre>
+<ul>
+<li><b>Longest chain</b>: Meta access → webhook → queue → gateway → orchestrator → parser/renderer → price-now → F1 v0 → batch → forecast/F2 wiring → voice → turn assembly → S-DEMO → alerts → rehearsals.</li>
+<li><b>Slack</b>: F3 (10.4 → 12.3) has ~3 days; benchmark recording (6.4) has 1 day before 9.4; documents (16.4, 17.3) can start any time after Day 10.</li>
+<li><b>Zero slack</b>: 1.1 (Meta), 2.4 → 3.2 (generator must exist by Day 3), 11.1 → 12.1 → 13.1 (Days 11–13), 15.1 (S-DEMO must be taken on 11 Dec).</li>
+</ul>
+
+<h2>7. Work split</h2>
+<table>
+<tr><th>Days</th><th>Taha: Data &amp; Forecasting</th><th>Ashna: Language &amp; Evaluation</th><th>Umar: Platform &amp; Channels</th></tr>
+<tr><td>1–2</td><td>Repo/CI, decision log, schema, synthetic spec</td><td>Benchmark spec, literature, lockbox procedure</td><td>Meta app, token, templates, VM, webhook</td></tr>
+<tr><td>3–5</td><td>Generator v1 + loader, real-data contract, name matching, realism check v0</td><td>Harness + L6, gazetteer, normalisers, benchmark texts</td><td>Ingest, worker, gateway, audio download</td></tr>
+<tr><td>6–7</td><td>Features + L1–L5, baselines E2</td><td>Resolver, rule parser, voice recordings</td><td>Orchestrator, state manager</td></tr>
+<tr><td>8–10</td><td>Price service, coverage, realism check final, lockbox rehearsal</td><td>ps_v1, literature done, benchmark freeze, F3 panel</td><td>STT service, renderer + validator, price-now e2e</td></tr>
+<tr><td>11–13</td><td>F1 v0, batch on the VM, SARIMA (opt)</td><td>LLM turn engine, F3 QR v0, forecast/F2 wiring</td><td>F2 engine + distances, backtest E5, voice e2e</td></tr>
+<tr><td>14–15</td><td>S-DEMO prep + freeze, golden answers</td><td>Follow-ups, benchmark run #1</td><td>Turn assembly, alerts</td></tr>
+<tr><td>16–17</td><td>Data failure paths, SRS, security checklist</td><td>Guardrails, benchmark run #2</td><td>Scenario 4, channel failures, SDS</td></tr>
+<tr><td>18–20</td><td>Slides, admin view (opt), runbook</td><td>FYP-I report</td><td>Demo freeze, phones</td></tr>
+</table>
+<p><b>Integration points</b> (all three present, ≤ 1 h each):</p>
+<table>
+<tr><th>#</th><th>Day</th><th>What gets integrated</th></tr>
+<tr><td>I1</td><td>3</td><td>Webhook ingest ↔ schema (U, T)</td></tr>
+<tr><td>I2</td><td>5</td><td>M1 smoke test</td></tr>
+<tr><td>I3</td><td>7</td><td>Parser output ↔ state patch contract (A, U)</td></tr>
+<tr><td>I4</td><td>10</td><td>Price-now end to end; G1/G2 freeze review</td></tr>
+<tr><td>I5</td><td>13</td><td>Forecast table + F2 ↔ bot tools; voice ↔ pipeline; G3</td></tr>
+<tr><td>I6</td><td>15</td><td>S-DEMO + golden answers ↔ scenarios; M4</td></tr>
+<tr><td>I7</td><td>19</td><td>Rehearsals</td></tr>
+</table>
+
+<h2>8. Top 10 risks + fallbacks</h2>
+<table>
+<tr><th>#</th><th>Risk</th><th>Validate by</th><th>Fallback</th></tr>
+<tr><td>1</td><td>Meta setup stalls (portfolio, OTP, token scopes)</td><td>Day 1 (1.1–1.2)</td><td>Retry from a second member's account; Twilio sandbox behind the same gateway adapter (D1 fallback); decide the same day</td></tr>
+<tr><td>2</td><td>Synthetic data too clean, so results look better than real markets would allow</td><td>Day 5 / Day 9 realism check</td><td>Noise, shocks and gaps inside plausibility ranges; SYN-NULL variant; "synthetic" on every chart and reply; no real-market claim in FYP-I</td></tr>
+<tr><td>3</td><td>Real data in FYP-II arrives late or in a different shape</td><td>Day 3 contract test; FYP-II S1</td><td>Canonical schema + loader contract; AMIS public data (D-001, fetch policy) as the FYP-II backup</td></tr>
+<tr><td>4</td><td>Leakage test fails late</td><td>Day 6 (6.3)</td><td>Fix before G2; no results reported before the freeze</td></tr>
+<tr><td>5</td><td>Voice below threshold A</td><td>Day 15 (15.3)</td><td>Swap primary STT; always-on echo; keyterm tuning</td></tr>
+<tr><td>6</td><td>Text understanding below 95%</td><td>Day 7 baseline, Day 15</td><td>Alias additions; LLM for messy messages; prompt fixes</td></tr>
+<tr><td>7</td><td>Gemini rate limit / outage</td><td>Day 11 (11.2)</td><td>Rule-only mode (built in)</td></tr>
+<tr><td>8</td><td>F1 v0 ≤ naive on dev folds</td><td>Day 11</td><td>Report honestly (valid null); error analysis; ranges still served from the naive-anchored model</td></tr>
+<tr><td>9</td><td>S-DEMO missing coverage for a scenario mandi</td><td>Day 14 (14.3)</td><td>Pick scenario mandis from the eligible list before freezing; never re-tune the generator or edit data to fit a scenario (spec + seed frozen at G2)</td></tr>
+<tr><td>10</td><td>Documents crowd out rehearsals</td><td>Day 16–18</td><td>plan2/docs drafts reused; report owner Ashna with sections from T and U by Day 18</td></tr>
+</table>
+
+<h2>9. Milestone gates (binary)</h2>
+<table>
+<tr><th>Gate</th><th>Day</th><th>PASS when all are true</th></tr>
+<tr><td>M1: WhatsApp + data in</td><td>5</td><td>(a) a text from a team phone gets a worker reply; (b) a webhook replay creates no duplicate event or outbound message; (c) a voice note's audio is downloaded; (d) synthetic rows for 3 crops load with passing unit tests; (e) both templates submitted</td></tr>
+<tr><td>M2: Freeze + price now</td><td>10</td><td>G1 recorded; G2 artefacts exist (ps_v1 tag, rehearsal hashes, generator spec hash, benchmark hash, S1–S5 text, L1–L6 green); scenario 1 passes on live data ≤ 7 s</td></tr>
+<tr><td>M3: First numbers</td><td>13</td><td>E2–E5 regenerate identically with <code>make results</code> from the tagged commit</td></tr>
+<tr><td>M4: Core answers</td><td>15</td><td>S-DEMO frozen with golden files; scenarios 2 and 3 pass with exact golden match; voice reply ≤ 10 s</td></tr>
+<tr><td>M5: Alerts + guardrails</td><td>17</td><td>Scenarios 4 and 5 pass; benchmark run #2 meets file 10 §6 or cut decisions are recorded</td></tr>
+<tr><td>M6: FYP-I ready</td><td>20</td><td>All 5 scenarios pass 3 consecutive rehearsals on Android + iPhone; recordings + runbook ready; documents submitted</td></tr>
+</table>
+<p><b>Gate rule</b>: if a gate fails on its day, the next day starts with a cut decision (§10) before any new work.</p>
+
+<h2>10. Cut-first features if we fall behind</h2>
+<table>
+<tr><th>Order</th><th>Cut</th><th>Trigger</th><th>Fallback</th></tr>
+<tr><td>1</td><td>Admin view (18.3)</td><td>Any slip by Day 18</td><td>Slides only</td></tr>
+<tr><td>2</td><td>SARIMA (13.3)</td><td>G3 at risk on Day 13</td><td>Baselines + LightGBM</td></tr>
+<tr><td>3</td><td>Urdu-script replies</td><td>Day 14</td><td>Roman Urdu</td></tr>
+<tr><td>4</td><td>Location pin origin</td><td>Day 14</td><td>Place names only</td></tr>
+<tr><td>5</td><td>Debounce</td><td>Day 14 (14.1)</td><td>Supersede-only</td></tr>
+<tr><td>6</td><td>F3 QR v0 (12.3)</td><td>Day 13</td><td>F3 baselines only</td></tr>
+<tr><td>7</td><td>Live alert trigger</td><td>M5 at risk on Day 16</td><td>Stored subscription + recorded alert</td></tr>
+<tr><td>8</td><td>LLM turn</td><td>Day 13 if 11.2 not done</td><td>Rule parser only</td></tr>
+<tr><td>9</td><td>Voice notes</td><td>M4 at risk on Day 15</td><td>Text only; voice in benchmark results + recording</td></tr>
+<tr><td>10</td><td>Real-data loader contract (3.3)</td><td>Any slip by Day 10</td><td>Loader written in FYP-II S1</td></tr>
+</table>
+<p><b>Never cut</b>: template-rendered facts + validator + unknown path; coverage gate; leakage tests + sealed lockbox; F2 risk rule; signature check + idempotent webhooks; consent + STOP; date and source on every rate.</p>
+
+<h2 class="pb">11. FYP-II sprints (Jan – May 2027)</h2>
+<p class="small">Same rules: binary exit conditions, gates, cut list. Mid evaluation (week of 15 Mar) and final (week of 24 May) are <span class="tag a">ASSUMPTION</span>s.</p>
+<table>
+<tr><th>Sprint</th><th>Taha</th><th>Ashna</th><th>Umar</th><th>Exit condition (binary)</th></tr>
+<tr><td>S1 · 4–17 Jan</td><td><b>Real data arrives</b>: loader; final 12 months sealed on arrival; audit E1-real; E2–E5 rerun on real dev folds with frozen ps_v1; daily batch 7 days unattended</td><td>Apply FYP-I jury changes; F3 features FS-L; area-sown feasibility</td><td>Fresh-SIM real number + display name; card on WABA; <b>real-user mode</b> (paid no-training LLM approved or rule-only) (R-23)</td><td>M7: real number live; real data loaded and lockbox sealed; batch ran 7 days without manual fixes</td></tr>
+<tr><td>S2 · 18–31 Jan</td><td>F1 v1: weather + arrivals features; conformal per crop × h</td><td>F3 v1: QR + small LightGBM; leave-future-out</td><td>LLM decision applied; validator v1; Urdu templates review</td><td>F1 v1 and F3 v1 results files exist on dev folds</td></tr>
+<tr><td>S3 · 1–14 Feb</td><td>Reason codes v1 (SHAP → Urdu/English); live accuracy table</td><td>Tercile probabilities + calibration; OUTLOOK intent in the bot (only crops with dev skill &gt; 0)</td><td>Location request message; send mandi location; optional TTS spike</td><td>M8: OUTLOOK scenario passes with golden match</td></tr>
+<tr><td>S4 · 15–28 Feb</td><td>Error analysis per crop/province; outlier detector v1</td><td>F2 full backtest with Umar; trader interviews (R7) → costs</td><td>F2 v1 costs + [Transport badlein]; daily digests (template category known)</td><td>Digest + transport-override scenarios pass</td></tr>
+<tr><td>S5 · 1–14 Mar</td><td colspan="3"><b>Feature freeze</b>: all models frozen with ps_v2; benchmark re-scored; mid-evaluation demo and report</td><td>G5: ps_v2 tagged; bot stable 7 days; S4 met</td></tr>
+<tr><td>S6 · 15–28 Mar</td><td>Freshness alarms; bug fixes</td><td>User-test protocol, consent form, questionnaire; recruit 10–15 users</td><td>Admin view v1; load test (100 simulated users)</td><td>≥ 10 participants consented</td></tr>
+<tr><td>S7 · 29 Mar–11 Apr</td><td colspan="3"><b>User test</b> (2 weeks): real decisions; daily log review; bug fixes only, no features</td><td>M9: ≥ 10 active participants</td></tr>
+<tr><td>S8 · 12–25 Apr</td><td colspan="3"><b>Lockbox opened once</b> (witnessed, logged): final S1–S3; user-test analysis (S5); no model changes after this</td><td>G6/M10: all claims backed by results files</td></tr>
+<tr><td>S9 · 26 Apr–9 May</td><td>Report: data + F1 chapters</td><td>Report: F3, evaluation, user test; paper draft</td><td>Report: system, bot, deployment; demo video</td><td>Full draft</td></tr>
+<tr><td>S10 · 10–23 May</td><td colspan="3">Two mock vivas; live-demo script with offline backup video; submission</td><td>M11: final evaluation</td></tr>
+</table>
+<p><b>FYP-II cut order</b>: TTS → digests → [Transport badlein] → OUTLOOK in the bot (keep offline F3 results) → user-test size (report n honestly). Never cut: the same list as §10 plus the witnessed single lockbox opening.</p>
+</body></html>

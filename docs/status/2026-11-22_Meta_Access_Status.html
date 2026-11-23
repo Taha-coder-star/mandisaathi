@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Meta Access Status</title>
+<link rel="stylesheet" href="../../plan3/src/style.css">
+<style>body { font-size: 9.2pt; } table { font-size: 8.4pt; margin: 4pt 0 7pt; } h2 { margin-top: 11pt; }</style></head>
+<body>
+<h1>Status report: WhatsApp access (tasks 1.1 / 1.2)</h1>
+<div class="sub">MandiSaathi FYP-I · what is done, what is not working, and why</div>
+<div class="meta">Date: Sun 22 Nov 2026 (one day before plan Day 1) · Plan: file 11 §2 Day 1 · Evidence: Meta Graph API v25.0 responses and the app dashboard's test-webhook log · No secrets in this report (token and app secret stay in <code>.env</code>)</div>
+
+<div class="warn"><b>In one line:</b> the setup is complete and incoming messages work, but Meta refuses to <b>deliver</b> any outgoing message from the new WhatsApp account (error <b>131031</b> "Business Account locked"; account health <b>141006</b> "payment method error"). Nothing before task 5.1 (Day 5, Fri 27 Nov) needs outgoing messages, so the schedule is not hit yet.</div>
+
+<h2>1. Task status</h2>
+<table>
+<thead><tr><th>ID</th><th>Task</th><th>Done condition (file 11)</th><th>Status</th></tr></thead>
+<tr><td>1.1</td><td>Meta portfolio + developer app → test WhatsApp account + test number; OTP-register phones</td><td>hello_world received on every registered phone</td><td><span class="tag a">NOT MET</span> All setup done; delivery blocked by Meta (§3)</td></tr>
+<tr><td>1.2</td><td>System user + permanent token in .env; gitleaks in CI</td><td>An API call with the stored token succeeds; CI secret scan runs</td><td><span class="tag r">HALF</span> Token verified (valid, never expires). Gitleaks waits for 1.4</td></tr>
+<tr><td>1.3</td><td>Submit templates price_alert, daily_rates</td><td>Status PENDING/APPROVED; category logged</td><td>Not started. Submitting may work; sending templates is blocked (§3)</td></tr>
+<tr><td>1.4</td><td>Repo layout, Dockerfile, CI</td><td>CI green; 3 roles start from one image</td><td>Not started. No Meta dependency: next</td></tr>
+<tr><td>1.5</td><td>Record 18 Nov outcome + A1 as D-004+; send real-data request</td><td>Entries in DECISIONS.md; request sent</td><td>Not started. Will also record this report's findings</td></tr>
+</table>
+
+<h2>2. What is done (with evidence)</h2>
+<table>
+<thead><tr><th>Item</th><th>Value</th><th>Evidence</th></tr></thead>
+<tr><td>Business portfolio</td><td>MandiSaathi · ID 1132556936300711 · unverified · separate from the Manzil AI portfolio</td><td>Business Settings</td></tr>
+<tr><td>Business profile</td><td>Legal name, address, country (Pakistan) set; website fixed from Meta's placeholder <code>invalid.invalid</code> to a GitHub profile URL</td><td>Health error 131000 cleared after the fix</td></tr>
+<tr><td>Developer app</td><td>MandiSaathi · ID 2189045445351741 · use case "Connect with customers through WhatsApp" · unpublished (not needed)</td><td>App dashboard</td></tr>
+<tr><td>Test WhatsApp account</td><td>"Test Messaging Account" · ID 1856647962192649 · review status APPROVED</td><td>Graph API</td></tr>
+<tr><td>Test number</td><td>+1 555-165-0384 · Phone number ID 1521179934403391 · CONNECTED · quality High · limit 250 customers/24 h · OTP verified</td><td>Graph API + Settings page</td></tr>
+<tr><td>Recipient phone</td><td>+92 309 ***8048 added and OTP-confirmed</td><td>API returned <code>wa_id</code> and no error 131030 (not allowlisted)</td></tr>
+<tr><td>System user + token</td><td><code>mandisathibot</code> (Admin); assets: app (Manage app), WhatsApp account (Everything); scopes <code>whatsapp_business_messaging</code>, <code>whatsapp_business_management</code>; expiry <b>never</b></td><td><code>debug_token</code>: is_valid = true, app ID matches</td></tr>
+<tr><td>Secrets handling</td><td>Token, IDs and app secret only in <code>D:\fyp\.env</code>; <code>.gitignore</code> excludes it; <code>.env.example</code> lists the keys with no values</td><td>Files in the project root</td></tr>
+<tr><td>Incoming messages</td><td>"hi" sent from the phone to the test number arrived at Meta at 12:56 PKT</td><td>Dashboard test-webhook log (<code>messages[].from = 923091298048</code>)</td></tr>
+</table>
+
+<h2>3. What is not working, and why</h2>
+<h3>3.1 Send attempts</h3>
+<table>
+<thead><tr><th>#</th><th>Sent from</th><th>Message</th><th>Meta API reply</th><th>Delivered?</th></tr></thead>
+<tr><td>1</td><td>Dashboard "Send message" (temporary token), 12:39–12:41</td><td>Meta sample template</td><td>Sent</td><td>No</td></tr>
+<tr><td>2</td><td>API, permanent token</td><td><code>hello_world</code> template</td><td><code>accepted</code></td><td>No: status webhook <b>failed, 131031 "Business Account locked"</b> (12:42:55)</td></tr>
+<tr><td>3</td><td>API, inside the 24 h window opened by "hi"</td><td>Plain text "MandiSaathi test reply"</td><td>Accepted (message ID returned)</td><td>No</td></tr>
+<tr><td>4</td><td>API, inside the same window</td><td>Plain text test message</td><td>Accepted (message ID returned)</td><td>No</td></tr>
+</table>
+<p>Meta <b>accepts</b> every request (so the token, IDs and recipient list are correct) and then <b>refuses delivery</b>. The only signal is the status webhook, which the app does not receive yet (task 2.2); until then the dashboard's test-webhook log is the only place to read it.</p>
+
+<h3>3.2 Account health (Graph API <code>health_status</code>)</h3>
+<table>
+<thead><tr><th>Level</th><th>Before profile fix</th><th>After profile fix</th><th>Meaning</th></tr></thead>
+<tr><td>Phone number</td><td>AVAILABLE</td><td>AVAILABLE</td><td>Number is fine (SIP calling errors are irrelevant)</td></tr>
+<tr><td>App</td><td>AVAILABLE</td><td>AVAILABLE</td><td>"Not subscribed to the message webhook": expected, task 2.2</td></tr>
+<tr><td>Business</td><td>BLOCKED: 131000 profile incomplete; 141010 not verified</td><td><b>LIMITED</b>: 141010 only</td><td>Unverified business is limited, not blocked</td></tr>
+<tr><td>WhatsApp account</td><td>BLOCKED: 141006</td><td><b>BLOCKED: 141006</b></td><td>"There is an error with the payment method. This will block business initiated conversations."</td></tr>
+</table>
+
+<div class="box"><b>Root cause:</b> the WhatsApp account has no payment method (141006). Meta's text says this blocks only business-initiated messages, but in practice the in-window text replies (attempts 3–4) were not delivered either, so the whole account is treated as locked (131031).<br>
+<b>Why the Manzil AI account worked before</b> <span class="tag a">ASSUMPTION</span>: it is an older portfolio that had already passed these checks or had billing set up. MandiSaathi's portfolio was created today, and Meta now applies these checks to new accounts.</div>
+
+<h3>3.3 Correction to the plan's research (file 02)</h3>
+<table>
+<thead><tr><th>File 02 claim</th><th>What we observed</th></tr></thead>
+<tr><td>1.2: "Get Started" creates a test account and test number automatically</td><td><span class="tag v">CONFIRMED</span></td></tr>
+<tr><td>1.3: test numbers need no payment method, even for templates</td><td><span class="tag a">CONTRADICTED</span> Health error 141006 blocks sending until a payment method is added</td></tr>
+<tr><td>1.4: test number reaches about 5 recipients</td><td>Not checked (only 1 recipient added)</td></tr>
+<tr><td>1.9: system-user token needed; Manzil's lasted 60 days</td><td>Confirmed, and the new token is <b>non-expiring</b>: no expiry date to diary</td></tr>
+</table>
+
+<h2>4. Options to fix outgoing messages</h2>
+<table>
+<thead><tr><th>Option</th><th>Cost / effort</th><th>Trade-off</th></tr></thead>
+<tr><td>A. Add a card to the MandiSaathi WhatsApp account (WhatsApp Manager → Settings → Payment methods)</td><td>Card needed; Pakistani cards must allow international/online payments. Test sends should not be charged (not verified)</td><td>The proper fix; needed anyway for templates (1.3) and alerts (15.2). Owner declined for now</td></tr>
+<tr><td>B. Use the Manzil AI test number temporarily</td><td>New system-user token from that portfolio; two values in <code>.env</code></td><td>Works today if that account still sends; deviation from D1 (own portfolio), must be logged and reversed</td></tr>
+<tr><td>C. Wait and re-check health each session</td><td>Free</td><td>New accounts sometimes clear on their own; no guarantee</td></tr>
+<tr><td>D. Twilio WhatsApp sandbox (D1 fallback, behind the same gateway adapter)</td><td>Free trial; join code from the phone</td><td>Plan's own fallback after a stall of more than 2 days; extra join step for every phone</td></tr>
+<tr><td>E. Ask Meta support (WhatsApp Manager → Account quality / Business Support Home)</td><td>Free; slow</td><td>May confirm whether test numbers really need a card</td></tr>
+</table>
+
+<div class="box"><b>Recommendation:</b> C now, and start task 1.4 (repo, Dockerfile, CI), which is on the critical path and needs nothing from Meta. If health still shows 141006 on <b>Day 3 (Wed 25 Nov)</b>, choose A, B or D so that 5.1 (echo bot, Day 5) and M1 (a) "a text from a team phone gets a worker reply" are not delayed. Record the choice in DECISIONS.md.</div>
+
+<h2>5. Impact on the schedule</h2>
+<table>
+<thead><tr><th>Task</th><th>Needs outgoing messages?</th><th>Affected?</th></tr></thead>
+<tr><td>1.4 repo/CI, 2.3 schema, 2.4 synthetic spec, 3.2 generator</td><td>No</td><td>No</td></tr>
+<tr><td>2.2 webhook verify + signature check, 3.1 idempotent ingest</td><td>No (incoming works)</td><td>No</td></tr>
+<tr><td>1.3 template submission</td><td>Submission no; sending yes</td><td>Partly</td></tr>
+<tr><td>5.1 gateway + echo bot (Day 5), M1 (a)</td><td><b>Yes</b></td><td><b>Yes, deadline for a fix</b></td></tr>
+<tr><td>15.2 / 16.1 alerts (Day 15–16)</td><td>Yes (templates)</td><td>Needs a card, or cut item 7 (stored subscription + recorded alert)</td></tr>
+</table>
+
+<h2>6. Security notes</h2>
+<ul>
+<li>The permanent token and app secret are only in <code>.env</code>. Never paste them into chat, screenshots or code.</li>
+<li>One screenshot showed part of the dashboard's <b>temporary</b> token; it expires within hours, so no action is needed.</li>
+<li>Security Center suggests "remove users without passkeys / with public email": that user is the owner. Do <b>not</b> act on it.</li>
+<li>Two-factor authentication on the portfolio is set to "No one"; turning it on is recommended (optional).</li>
+</ul>
+
+<h2>7. Next steps</h2>
+<ol>
+<li>Start 1.4 (repo, Dockerfile, CI with gitleaks), which also completes 1.2.</li>
+<li>Re-check account health at the start of each session.</li>
+<li>1.5: write D-004+ in DECISIONS.md, including this block, the file 02 claim 1.3 correction and the solo-work change to 1.1's done condition.</li>
+<li>Day 3: if still blocked, pick option A, B or D.</li>
+</ol>
+</body></html>

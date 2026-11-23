@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>08 Final Architecture RFC</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: Final Architecture RFC (v1.0, 22 Nov 2026)</h1>
+<div class="sub">Synthesises files 01–07. Sources are cited by file tag.</div>
+<div class="meta">Plan pack 3 · File 08 · Owners: Umar (system), Taha (data), Ashna (evaluation) · Amended by the red-team review (file 09 §D) and amendment A1 (file 03 §9: synthetic data in FYP-I); read all three</div>
+<table>
+<tr><th>Tag</th><th>File</th><th>Covers</th></tr>
+<tr><td>[REQ]</td><td>01</td><td>Requirements, risks, roadmap</td></tr>
+<tr><td>[META]</td><td>02</td><td>Access, AI policy, pricing (D1, D2)</td></tr>
+<tr><td>[DATA]</td><td>03</td><td>Sources, data model, normalisation (D3, D4, D5)</td></tr>
+<tr><td>[ML]</td><td>04</td><td>F1, F3, F2 methods (D6, D7, D8, D17)</td></tr>
+<tr><td>[LANG]</td><td>05</td><td>Parser, LLM, STT, language (D9, D10, D11)</td></tr>
+<tr><td>[UX]</td><td>06</td><td>Formats, alerts, state (D12, D13, D14)</td></tr>
+<tr><td>[OPS]</td><td>07</td><td>Hosting, privacy (D15, D16)</td></tr>
+</table>
+
+<h2>1. Final architecture summary</h2>
+<p>MandiSaathi is a <b>modular monolith</b>: one Python codebase, one container image, three process roles: <b>web</b> (receives webhooks), <b>worker</b> (runs conversation turns) and <b>batch</b> (daily data and model runs). It sits on <b>one Postgres database</b> (prices, forecasts, conversation state, job queue, logs). WhatsApp Cloud API (direct) is the only user interface.</p>
+<ol>
+<li><b>Ack fast.</b> Every inbound webhook is verified, stored idempotently and acknowledged within about 1 s. All work happens in per-farmer serialised jobs.</li>
+<li><b>Voice joins text.</b> A voice note gets one extra step (pre-checks + STT) inside the turn, then the same pipeline.</li>
+<li><b>Parse, then one LLM turn only if needed.</b> A rule-based parser handles clean messages; a single LLM turn with intent-scoped deterministic tools handles the rest (≤ 3 tool iterations).</li>
+<li><b>Numbers come from tables, not from the turn.</b> F1 and F3 are precomputed by the batch role with the same package used in the evaluation; F2 is a deterministic function over stored forecasts and cached distances.</li>
+<li><b>Template-rendered facts.</b> Every rate, range, rupee amount, mandi name and date in a reply is rendered by a template from the tool payload. The LLM writes only a short framing sentence. A validator blocks any number-like token in the LLM text.</li>
+</ol>
+<p><b>What we deliberately don't use:</b> microservices, a vector database, an agent framework, a message broker, Redis, an object store, multi-tenant RLS, carousels, a farmer web app. None is justified by files 01–07.</p>
+
+<h2>2. Components and responsibility of each</h2>
+<table>
+<tr><th>#</th><th>Component</th><th>Role</th><th>Responsibility</th><th>LLM?</th></tr>
+<tr><td>C1</td><td>Webhook Gateway</td><td>web</td><td>Verify <code>X-Hub-Signature-256</code> and the verify token; parse; insert <code>inbound_event</code> (unique on WAMID or status key) and a job in one transaction; return 200</td><td>No</td></tr>
+<tr><td>C2</td><td>Job Queue &amp; Worker Runtime</td><td>worker</td><td>Postgres job table: priorities, <code>run_at</code> delays, retries with backoff, dead-letter; one active job per farmer (advisory lock); claims with SKIP LOCKED</td><td>No</td></tr>
+<tr><td>C3</td><td>Conversation Orchestrator</td><td>worker</td><td>Loads user + state; consent gate; coalesces pending messages in WhatsApp-timestamp order; runs STT for voice inside the turn; calls C6 then C5 if needed; persists state and answer positions</td><td>Calls C5</td></tr>
+<tr><td>C4</td><td>Speech Service</td><td>worker</td><td>Download within 5 min; duration and silence pre-checks; STT primary → fallback; sanity checks; emits text + stt_meta [LANG §6]</td><td>No (external STT)</td></tr>
+<tr><td>C5</td><td>AI Turn Engine</td><td>worker</td><td>The only LLM caller. Compact context; intent-scoped tool set; ≤ 3 iterations; timeout budget; model adapter (Gemini free / paid option); scope guard</td><td>Yes</td></tr>
+<tr><td>C6</td><td>Parser &amp; Normalisers</td><td>lib</td><td>Rule-based intent/slot parser; crop and place resolvers (alias → fuzzy → candidates); unit, quantity, number-word, date normalisers; plausibility bands [DATA §4–5]</td><td>No</td></tr>
+<tr><td>C7</td><td>Query State Manager</td><td>lib</td><td>Slot patches (set / add / clear), provenance, versions, pending clarification, reference resolution (position / quote) [UX §4]</td><td>No</td></tr>
+<tr><td>C8</td><td>Price Service</td><td>lib</td><td>Latest non-SUSPECT observed rate per crop × mandi, with date, source and staleness flag</td><td>No</td></tr>
+<tr><td>C9</td><td>Forecast Reader</td><td>lib</td><td>Reads today's <code>forecast</code> / <code>outlook</code> rows; applies the coverage gate; attaches reason codes</td><td>No</td></tr>
+<tr><td>C10</td><td>F2 Decision Engine</td><td>lib (<code>mandi.decide</code>)</td><td>Net revenue per candidate mandi, risk rule, top 3 with cost assumptions [ML §3]</td><td>No</td></tr>
+<tr><td>C11</td><td>Renderer &amp; Grounding Validator</td><td>lib</td><td>Template-rendered fact blocks (Roman Urdu / Urdu / English); validator rejects number-like tokens, unknown mandi names and promise words in LLM text → regenerate once → template-only reply</td><td>No</td></tr>
+<tr><td>C12</td><td>WhatsApp Gateway adapter</td><td>worker</td><td>All Cloud API calls (text, buttons, list, location, location request, templates, mark-read/typing); 24 h window per user; template choice outside it; status webhooks; outbound log</td><td>No</td></tr>
+<tr><td>C13</td><td>Batch Pipeline</td><td>batch</td><td>06:00 ingest (loaders per source) → validation and outlier flags → <code>data_health</code> → features → F1 scoring (daily) / F3 (monthly) → coverage table → triggers C14</td><td>No</td></tr>
+<tr><td>C14</td><td>Subscription &amp; Alert Service</td><td>worker</td><td>Opt-in, threshold evaluation with hysteresis, digests, caps, template budget, STOP</td><td>No</td></tr>
+<tr><td>C15</td><td>Model package <code>mandi</code></td><td>lib</td><td><code>ingest</code>, <code>features</code>, <code>models</code>, <code>decide</code>: imported by C13 and C16 alike ("one engine, two uses")</td><td>No</td></tr>
+<tr><td>C16</td><td>Evaluation Harness</td><td>offline</td><td>Rolling-origin backtests, baselines, leakage tests L1–L6, bootstrap CIs, lockbox handling; bot benchmark runner and conversation replay</td><td>Offline only</td></tr>
+<tr><td>C17</td><td>Admin view</td><td>offline / read-only</td><td>Streamlit page: data freshness, coverage, live accuracy, message counts (for the team and the jury)</td><td>No</td></tr>
+</table>
+
+<h2>3. Farmer data flow (text)</h2>
+<ol>
+<li>[sync, C1] Meta POSTs → verify signature → <code>INSERT inbound_event ON CONFLICT (wamid) DO NOTHING</code> → if new, insert job(user_key) → 200. Target &lt; 300 ms.</li>
+<li>[async, C2→C3] Worker claims the job, takes the farmer lock, loads all unprocessed messages of that farmer in timestamp order.</li>
+<li>[C3] Mark read + typing indicator. First contact without consent → consent message, stop. STOP → C14.</li>
+<li>[C6] Rule-based parse → patch. If intent and all required slots are resolved → skip the LLM.</li>
+<li>[C5, LLM call] Otherwise: context = state snapshot + last answer positions + last ~6 messages; LLM returns tool calls (<code>update_query</code>, <code>price_now</code>, <code>get_forecast</code>, <code>best_mandis</code>, <code>get_outlook</code>, <code>set_alert</code>…).</li>
+<li>[C6/C7] Normalise raw spans → merge state → gate (required slots present? no AMBIGUOUS slot?) → if not, <code>clarification_needed{slot, candidates}</code>.</li>
+<li>[C8/C9/C10] Deterministic lookup or ranking → payload (facts, run_id, positions).</li>
+<li>[C5, same turn] LLM writes at most one framing sentence. [C11] Validate → render facts by template.</li>
+<li>[C12] Send; store reply WAMID → <code>answer_shown</code> (positions, run_id) → commit.</li>
+<li>[async, C1/C12] Status webhooks update outbound rows (sent &lt; delivered &lt; read; failed terminal).</li>
+</ol>
+
+<h2>4. Voice data flow</h2>
+<ol>
+<li>[sync, C1] Same as text; event type <code>audio</code>.</li>
+<li>[C3→C4, inside the turn] Download (5-min URL, re-query on expiry) → pre-checks (&lt; 1 s ask again; &gt; 120 s truncate and say so; silence → ask again, no STT call).</li>
+<li>[C4] STT primary with gazetteer keyterms → sanity checks → on failure fallback → both fail → "likh kar bhej dein" + alert.</li>
+<li>Native transcript + <code>modality=voice</code> + stt_meta → same flow from step 4. Only difference: voice-sourced crop/place/quantity that are non-exact or implausible trigger an echo-confirm before any tool answer [LANG §6].</li>
+<li>Audio deleted after transcription [OPS §3].</li>
+</ol>
+
+<h2>5. Daily batch flow (C13)</h2>
+<pre>06:00 PKT  for each source loader: fetch/receive → save raw (sha256) → parse → price_obs (outlier_flag)
+           → data_health row (rows, rejects, latest market_date)
+           if any core source failed → keep yesterday's run as "current", flag stale, alert team
+07:30      features (rules T1–T8) → F1 score all eligible series, h = 1..7 → forecast(run_id)
+           series_coverage refresh
+1st of month  F3 score → outlook(run_id)
+09:30      C14: evaluate thresholds and digests on the new run → send (template if outside window)
+Weekly     retrain F1 only in development branches; production uses frozen models until ps_v2</pre>
+<p>Times are <span class="tag a">ASSUMPTION</span> until the sources' publish times are known (R3). The bot never computes a forecast inline.</p>
+
+<h2>6. Where-to-sell flow (deterministic, no LLM inside)</h2>
+<pre>query_state ──► gate: crop covered? origin resolved (place or pin)? quantity + unit known?
+        │ no → clarification_needed (LLM phrases one question; buttons by C11)
+        ▼ yes
+candidates: eligible mandis for crop within 150 km road distance (distance cache; OSRM on miss)
+        ▼
+for each m: P̂ = today's F1 P50 at arrival day; Net(m) = Q·P̂·(1−c) − T(d,Q) − F − Q·P̂·δ·ℓ
+        ▼
+risk rule: non-nearest m kept only if Net with its P10 &gt; Net(nearest) with P50
+        ▼
+payload: top-3 {mandi, range, net, gain_vs_nearest} + cost assumptions + run_id ──► template ──► reply</pre>
+
+<h2>7. Alert flow</h2>
+<ol>
+<li>Farmer asks → C5/C6 extract {crop, mandi, direction, price} → C11 confirmation with [Haan] [Nahi] → C14 stores subscription (armed).</li>
+<li>After each daily run: crossings evaluated on non-SUSPECT prices; hysteresis 3%; caps (1/subscription/day, 3/farmer/day); budget cap.</li>
+<li>C12: inside window → service message; outside → approved template. Delivery status logged.</li>
+</ol>
+
+<h2>8. Database boundary</h2>
+<table>
+<tr><th>Domain</th><th>Tables</th></tr>
+<tr><td>Reference</td><td>crop, crop_alias, mandi, place, place_alias, distance</td></tr>
+<tr><td>Prices and inputs</td><td>price_obs, weather_daily, macro_monthly, data_health</td></tr>
+<tr><td>Model outputs</td><td>forecast, outlook, series_coverage, model_registry (model_version, ps_id, file hash)</td></tr>
+<tr><td>Conversation</td><td>wa_user, query_state, query_patch_log, answer_shown, pending_clarification, message_log</td></tr>
+<tr><td>Alerts</td><td>subscription, alert_event</td></tr>
+<tr><td>Infrastructure</td><td>inbound_event (unique WAMID / status key), job, outbound_message, usage_event</td></tr>
+</table>
+<ul>
+<li><b>Transactional outbox</b>: a state change and the job that sends its message are written in one transaction.</li>
+<li>Forecast and outlook rows are append-only per <code>run_id</code>; replies reference the run_id they used.</li>
+<li>The lockbox data lives outside the database in a sealed folder until S8.</li>
+</ul>
+
+<h2>9. AI / LLM boundary</h2>
+<table>
+<tr><th>#</th><th>Call</th><th>When</th><th>Model</th></tr>
+<tr><td>L1</td><td>Farmer turn</td><td>Only when the rule-based parse is incomplete or ambiguous</td><td>FYP-I: Gemini free (team phones); FYP-II: paid no-training option if approved</td></tr>
+<tr><td>L2</td><td>Framing sentence</td><td>Same turn, after tools</td><td>Same</td></tr>
+<tr><td>L3</td><td>Regeneration</td><td>Only when the validator rejects (max 1)</td><td>Same</td></tr>
+</table>
+<table>
+<tr><th>The LLM DOES</th><th>The LLM NEVER</th></tr>
+<tr><td>Understand EN / Roman Urdu / Urdu script / mixed / transcripts</td><td>State a price, range, rupee amount, distance, probability or date</td></tr>
+<tr><td>Emit slot patches with raw spans; choose tools; express references</td><td>Emit a crop ID, mandi ID or place it did not get from a resolver</td></tr>
+<tr><td>Choose among resolver candidates after a clarification answer</td><td>Compute forecasts or rankings; decide coverage; send alerts</td></tr>
+<tr><td>Write one framing sentence in the farmer's language; disclose it is an AI</td><td>Give farming, financial or legal advice beyond prices; chat off-topic</td></tr>
+</table>
+<p><b>Deterministic (no LLM):</b> signature check, dedupe, coalescing, consent gate, STT chain and checks, rule-based parse, all normalisers and resolvers, state merges, gate, price lookup, forecast read, coverage gate, F2 ranking, rendering, validation, window and template choice, alert evaluation, every batch step.</p>
+
+<h2>10. WhatsApp / Meta boundary</h2>
+<table>
+<tr><th>Aspect</th><th>Design</th></tr>
+<tr><td>Access</td><td>Direct Cloud API, our Meta app [META D1]</td></tr>
+<tr><td>Numbers</td><td>FYP-I: test number, 5 allowlisted phones. FYP-II: one fresh-SIM real number [META D2]</td></tr>
+<tr><td>Inbound</td><td>Text, audio, location, interactive replies (with context.id); status webhooks</td></tr>
+<tr><td>Outbound</td><td>Service messages inside 24 h (text, buttons, list, location, location request); templates <code>price_alert</code>, <code>daily_rates</code> outside</td></tr>
+<tr><td>Limits respected</td><td>Buttons ≤ 3 (20 chars); list ≤ 10 rows (24/72); body ≤ 1,024 for interactive; 4,096 for text [UX]</td></tr>
+<tr><td>Policy</td><td>Business-specific AI only; scope guard; disclosure; no training on platform data [META R2]</td></tr>
+<tr><td>Not used</td><td>Groups, catalogs, carousels, BSPs, Meta Business Agent</td></tr>
+</table>
+
+<h2>11. Data and licence boundary</h2>
+<ul>
+<li>AMIS: fetched only under the fetch policy (rules 1–12); raw pages never redistributed; source acknowledged in replies and reports.</li>
+<li>Zarai Mandi: used only as provided by the co-supervisor and only within the written permission; no scraping of its site or app.</li>
+<li>Synthetic data (FYP-I): labelled "Demo data (synthetic)" in every reply, chart and table; never presented as market data.</li>
+<li>Replies show the source of the rate they quote; forecasts say "MandiSaathi andaza".</li>
+</ul>
+
+<h2>12. Security and privacy boundary</h2>
+<ul>
+<li>Inbound authentication: signature verification mandatory; invalid → 401, never processed.</li>
+<li>Prompt injection: tools are chosen in code by intent; no tool writes anything except the farmer's own query state and subscriptions; there are no admin tools on the WhatsApp path.</li>
+<li>Admin actions only via the server (SSH) or the read-only admin view; no WhatsApp admin commands in FYP-I.</li>
+<li>Secrets in env / server secret file only; gitleaks in CI; LLM/STT accounts without cards in FYP-I.</li>
+<li>Privacy per [OPS §3]: encrypted + hashed numbers, masked prompts, 90-day log retention, STOP deletes.</li>
+</ul>
+
+<h2>13. Failure / retry / idempotency strategy</h2>
+<table>
+<tr><th>Risk</th><th>Strategy</th></tr>
+<tr><td>Duplicate webhooks</td><td>Unique WAMID / (wamid, status); duplicate = no-op that still returns 200</td></tr>
+<tr><td>Out-of-order messages</td><td>Per-farmer lock; all pending messages processed in WhatsApp-timestamp order in one turn</td></tr>
+<tr><td>DB down at webhook</td><td>Return 5xx so Meta redelivers; never 200 before the insert commits</td></tr>
+<tr><td>Worker crash</td><td>Lease timeout → re-claim; sends check <code>outbound_message</code> by (job_id, seq) first</td></tr>
+<tr><td>Outbound send failure</td><td>429/5xx → backoff (max 5); ambiguous timeout → no blind resend</td></tr>
+<tr><td>Outside 24 h window</td><td>Never send free-form; alerts use templates; replies to old messages wait for the farmer</td></tr>
+<tr><td>STT failure</td><td>Primary → fallback → "likh kar bhej dein"</td></tr>
+<tr><td>LLM failure / timeout</td><td>8 s per call, 12 s per turn → rule-based result if usable, else a fixed "dobara poochein" template; rate-limit errors switch to rule-based for 10 min</td></tr>
+<tr><td>Validator rejection</td><td>Regenerate once → template-only reply</td></tr>
+<tr><td>Daily batch failure</td><td>Yesterday's run stays current; replies show the date; team alerted; alerts skipped for that day</td></tr>
+<tr><td>Source outlier</td><td>SUSPECT rows excluded from replies and alerts until confirmed</td></tr>
+<tr><td>Poison jobs</td><td>Dead-letter after max attempts + alert; farmer gets a safe fallback reply</td></tr>
+</table>
+
+<h2>14. Scale (sized for an FYP, not a company)</h2>
+<ul>
+<li>Expected load: ≤ 50 active users, ≤ 1 message/s peak. One VM, 2 worker threads. The binding constraint is free-tier LLM/STT rate limits, not the database.</li>
+<li>Batch: ≈ 3 crops × ≈ 40 mandis × 7 horizons ≈ 840 forecast rows/day: seconds on CPU.</li>
+<li>Scale-up path (only on a measured trigger): more worker threads; paid LLM tier; nothing else.</li>
+</ul>
+
+<h2>15. FYP-I demo architecture</h2>
+<ul>
+<li>One VM (Caddy + web + worker + Postgres) with the frozen synthetic snapshot S-DEMO and run R-20261211 [DATA §7]; Meta test number; Gemini free + Scribe v2 free keys.</li>
+<li>Seeded: covered crops (onion, tomato, potato), Punjab mandis with coordinates, aliases, distance cache for 4 origins, cost parameters ps_v1.</li>
+<li>In scope: text + voice, price now, F1 range, F2 ranking, threshold alert (one live trigger), follow-ups, clarifications, out-of-scope redirect; offline results E1–E6 on the admin view.</li>
+</ul>
+<table>
+<tr><th>Week</th><th>Indicative build order (details in file 11)</th></tr>
+<tr><td>W1</td><td>Meta app + webhook + queue + schema; synthetic generator + loader + realism check; benchmark set started</td></tr>
+<tr><td>W2</td><td>Normalisers + resolvers + rule parser; gateway + echo → price-now; baselines E2; harness; freeze G2</td></tr>
+<tr><td>W3</td><td>F1 v0 + forecast table; F2 engine + backtest; LLM turn + validator; voice; F3 baselines</td></tr>
+<tr><td>W4</td><td>Alerts; failure paths; benchmark run; S-DEMO freeze; SRS/SDS/report; rehearsals</td></tr>
+</table>
+
+<h2>16. FYP-II evolution path (same architecture, added modules)</h2>
+<table>
+<tr><th>Phase</th><th>Adds</th><th>Trigger</th></tr>
+<tr><td>S1–S2</td><td>Fresh-SIM real number; real data loaded, lockbox sealed on arrival; F1 v1 (weather, arrivals, conformal); F3 v1; paid LLM decision</td><td>FYP-I passed</td></tr>
+<tr><td>S3–S4</td><td>Daily digests; location request; reason codes v1; F2 full costs + sensitivity; optional voice replies</td><td>M2</td></tr>
+<tr><td>S5–S8</td><td>Feature freeze (ps_v2); user test; lockbox opened once</td><td>G5</td></tr>
+<tr><td>Conditional</td><td>Area-sown feature (if released in time); Urdu TTS (if user test asks); more crops/provinces (if data)</td><td>Measured need only</td></tr>
+</table>
+
+<h2>17. Mermaid system diagram (source)</h2>
+<pre>flowchart LR
+  subgraph WA["WhatsApp Cloud API"]
+    F["Farmer: text / voice / pin"]
+  end
+  subgraph APP["MandiSaathi: one image"]
+    GW["C1 Webhook Gateway"] --> Q[("C2 Job queue (Postgres)")]
+    Q --> OR["C3 Orchestrator"]
+    OR -- voice --> STT["C4 Speech"]
+    OR --> P["C6 Parser + normalisers"]
+    OR --> AI["C5 AI Turn Engine (only LLM caller)"]
+    AI -- tools --> P & ST["C7 State"] & PR["C8 Price"] & FR["C9 Forecast reader"] & DE["C10 F2 engine"] & AL["C14 Alerts"]
+    AI --> RV["C11 Renderer + validator"] --> WG["C12 WhatsApp gateway"]
+    B["C13 Batch: ingest → QC → F1/F3 score"] --> FR
+  end
+  subgraph DB["Postgres"]
+    T[("prices · forecasts · state · queue · logs")]
+  end
+  F --> GW
+  WG --> F
+  B --> T
+  PR & FR & DE & ST --> T
+  STT --> X["STT API"]
+  AI --> L["LLM API"]
+  SRC["FYP-I: synthetic generator · FYP-II: real export / AMIS · CPI · diesel"] --> B</pre>
+
+<h2>18. D1–D18 decision table</h2>
+<table>
+<tr><th>D</th><th>Decision</th><th>Selected</th><th>Support</th><th>Deferred to FYP-II</th></tr>
+<tr><td>D1</td><td>Access path</td><td>Direct Cloud API, own Meta app; Twilio sandbox only as emergency transport</td><td>[META]</td><td>–</td></tr>
+<tr><td>D2</td><td>Number</td><td>Test number (5 phones) in FYP-I; fresh-SIM real number in S1</td><td>[META]</td><td>Real number</td></tr>
+<tr><td>D3</td><td>Data source</td><td>Source-independent loaders. FYP-I: team-generated synthetic data (A1). FYP-II: real data from the co-supervisor (AMIS public as backup)</td><td>[DATA]</td><td>Real data arrives (S1)</td></tr>
+<tr><td>D4</td><td>Splits</td><td>FYP-I: lockbox procedure rehearsed on a synthetic holdout. FYP-II: final 12 months of the real data sealed on arrival; rolling-origin folds; live period separate</td><td>[DATA]</td><td>Lockbox opening (S8)</td></tr>
+<tr><td>D5</td><td>Data model</td><td>Canonical PKR/100 kg table with <code>reported_at</code>; crop/place gazetteers; mann display; bori/crate always asked</td><td>[DATA]</td><td>–</td></tr>
+<tr><td>D6</td><td>F1</td><td>LightGBM quantile + conformal over 3 baselines + SARIMA comparison; coverage gate; SHAP reasons</td><td>[ML]</td><td>Weather/arrivals features, reasons v1</td></tr>
+<tr><td>D7</td><td>F3</td><td>Quantile regression on deviations from climatology; terciles; climatology shipped where no skill</td><td>[ML]</td><td>F3 in the bot</td></tr>
+<tr><td>D8</td><td>F2</td><td>Deterministic net revenue + P10 risk rule, 150 km radius, assumptions shown + sensitivity</td><td>[ML]</td><td>Trader-confirmed costs</td></tr>
+<tr><td>D9</td><td>Orchestration</td><td>Rule parser first, one LLM turn with deterministic tools; Gemini free on team data; paid no-training LLM for real farmers if approved</td><td>[LANG]</td><td>Paid LLM</td></tr>
+<tr><td>D10</td><td>STT</td><td>Scribe v2 primary; faster-whisper or Gemini (behind silence check) fallback; native transcript</td><td>[LANG]</td><td>–</td></tr>
+<tr><td>D11</td><td>Language</td><td>Mirror latest message; voice → Roman Urdu; fixed tokens never translated; "andaza" + source + date always</td><td>[LANG]</td><td>Voice replies</td></tr>
+<tr><td>D12</td><td>Formats</td><td>Text + template fact blocks + ≤ 3 buttons; lists; location messages</td><td>[UX]</td><td>–</td></tr>
+<tr><td>D13</td><td>State</td><td>DB query state with provenance, patches, answer positions + run_id, pending clarification</td><td>[UX]</td><td>–</td></tr>
+<tr><td>D14</td><td>Alerts</td><td>Opt-in thresholds (FYP-I) + digests (FYP-II); templates outside window; hysteresis, caps, budget; STOP deletes</td><td>[UX]</td><td>Digests</td></tr>
+<tr><td>D15</td><td>Hosting</td><td>One image, three roles, Docker Compose on one free VM, Caddy HTTPS</td><td>[OPS]</td><td>–</td></tr>
+<tr><td>D16</td><td>Privacy</td><td>Consent, STOP, encrypted+hashed numbers, 90-day logs, audio deleted, no vendor training, single tenant</td><td>[OPS]</td><td>–</td></tr>
+<tr><td>D17</td><td>Evaluation</td><td>S1–S5 pre-registered and frozen at G2; lockbox once; valid-null wording; bot benchmark thresholds</td><td>[ML], [LANG]</td><td>S5 user test</td></tr>
+<tr><td>D18</td><td>Scope</td><td>File 10</td><td>all</td><td>Everything listed OUT there</td></tr>
+</table>
+
+<h2>Explicit summary</h2>
+<table>
+<tr><th>Aspect</th><th>Answer</th></tr>
+<tr><td>Synchronous</td><td>Webhook verify → insert event + job → 200</td></tr>
+<tr><td>Asynchronous</td><td>Everything else: STT, parsing, LLM, lookups, rendering, sending, statuses, alerts, the batch pipeline</td></tr>
+<tr><td>Queues</td><td>One Postgres job table: farmer turns (serialised per farmer), alert sends, status processing, retries/dead-letter</td></tr>
+<tr><td>Caching</td><td>Distance cache; in-process gazetteer cache; LLM prompt caching where the vendor supports it. Never forecasts or rates (read fresh)</td></tr>
+<tr><td>LLM calls</td><td>L1 farmer turn (only when needed), L2 framing, L3 regeneration (max 1)</td></tr>
+<tr><td>Deterministic</td><td>Everything in §9 "Deterministic"</td></tr>
+</table>
+</body></html>

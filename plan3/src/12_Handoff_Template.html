@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>12 Handoff Template</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: Task Handoff Template</h1>
+<div class="sub">One page per handoff, written when a task from file 11 is finished, blocked, or passed to another member</div>
+<div class="meta">Plan pack 3 · File 12 · 22 Nov 2026 · Copy to <code>handoffs/YYYY-MM-DD_&lt;task-ids&gt;.md</code> in the repo · Rule carried from Manzil: a handoff states evidence, not intentions; anything not verified is tagged</div>
+
+<h2>Rules for writing a handoff</h2>
+<ul>
+<li>Every "done" row links to evidence a teammate can check in under 2 minutes: a commit, a passing test name, a results file, a screenshot of the WhatsApp reply, or a hash in <code>DECISIONS.md</code>.</li>
+<li>"Done" means the task's binary DONE condition in file 11 is met. A task that is not done is reported as <b>PARTIAL</b> or <b>BLOCKED</b> with the reason; never round up.</li>
+<li>Facts carry the status tags: <span class="tag v">VERIFIED</span> (we ran or saw it), <span class="tag r">REPORTED</span> (a document or person says so), <span class="tag a">ASSUMPTION</span>, <span class="tag u">BELIEF – VERIFY</span>, <span class="tag c">CORRECTED</span>.</li>
+<li>"What I need from you" is ordered, and each item says who, by when, and what unblocks.</li>
+<li>Never paste secrets (tokens, keys, phone numbers) in a handoff; name the <code>.env</code> variable instead.</li>
+<li>Data rows mention their source: <code>SYN</code> (synthetic, FYP-I) or the real source (FYP-II).</li>
+</ul>
+
+<h2>Template</h2>
+<pre>
+# Handoff: tasks &lt;IDs&gt; (&lt;short title&gt;)
+Date: &lt;YYYY-MM-DD&gt;   From: &lt;member&gt;   To: &lt;member(s)&gt;   Day &lt;n&gt; of 20
+Gate affected: &lt;M#/G# or none&gt;
+
+## 1. Status at a glance
+| Task | DONE condition (from file 11)        | Status            | Commit / PR | Evidence                      |
+|------|--------------------------------------|-------------------|-------------|-------------------------------|
+| x.y  | &lt;copy the binary condition&gt;         | DONE/PARTIAL/BLOCKED | &lt;hash&gt;   | &lt;test name / file / screenshot&gt; |
+
+## 2. What I need from you (in order)
+1. &lt;who&gt; · &lt;what&gt; · &lt;by when&gt; · unblocks &lt;task&gt;
+2. ...
+
+## 3. What changed
+- Files / tables / env variables added or changed (no secret values)
+- Decisions taken (copy the DECISIONS.md entry ID: D-0xx)
+
+## 4. Files
+| Path | Purpose | Status |
+|------|---------|--------|
+
+## 5. How to check it yourself
+- Commands to run (e.g. `make test`, `python scripts/make_synthetic.py --seed 7 --check`)
+- Expected output
+
+## 6. Open items and risks
+| Item | Tag (VERIFIED / ASSUMPTION / BELIEF-VERIFY) | Owner | Next step |
+|------|---------------------------------------------|-------|-----------|
+
+## 7. Not done / not checked
+- &lt;anything skipped, and why&gt;
+</pre>
+
+<h2>Filled example (format only)</h2>
+<p class="small">The values below show the expected level of detail. They are illustrative placeholders, not results.</p>
+<table>
+<tr><th>Task</th><th>DONE condition</th><th>Status</th><th>Commit</th><th>Evidence</th></tr>
+<tr><td>3.2</td><td>Same seed → identical file hash; loader tests pass; a per-40 kg row converts × 2.5 exactly</td><td>DONE</td><td>&lt;hash&gt;</td><td><code>tests/test_synthetic.py::test_seed_reproducible</code>, <code>test_unit_40kg</code> green in CI run &lt;id&gt;</td></tr>
+<tr><td>3.3</td><td>Contract test passes</td><td>PARTIAL</td><td>&lt;hash&gt;</td><td>Interface done; waiting for the export column list from the co-supervisor <span class="tag u">BELIEF – VERIFY</span></td></tr>
+</table>
+<p><b>What I need from you (in order)</b>: (1) Taha: send the column-list reminder to the co-supervisor by Day 4, which unblocks 3.3. (2) Ashna: review <code>spec.yaml</code> plausibility ranges by Day 5, which unblocks 5.3.</p>
+
+<h2>When a handoff is mandatory</h2>
+<table>
+<tr><th>Trigger</th><th>Who writes it</th></tr>
+<tr><td>Any CRIT task finished or blocked</td><td>Task owner, same day</td></tr>
+<tr><td>Every gate day (Days 5, 10, 13, 15, 17, 20)</td><td>Each member, one combined page per gate</td></tr>
+<tr><td>Before a member is unavailable for ≥ 1 working day</td><td>That member</td></tr>
+<tr><td>Any change to a frozen artefact (ps_v1, generator spec + seed, benchmark, S-DEMO)</td><td>The person proposing it; it needs all three members' sign-off in DECISIONS.md</td></tr>
+</table>
+</body></html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>03 Data Sources and Data Model</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: R3 / R4 Results · Data Sources, Data Model, Normalisation · Resolves D3, D4, D5</h1>
+<div class="sub">Where every number comes from, how it is stored, how farmer words map to canonical crops, places and units, and the frozen demo snapshot</div>
+<div class="meta">Plan pack 3 · File 03 · 22 Nov 2026 · Owner: Taha · Scope: Punjab first (AMIS is the Punjab directorate's system); crops onion, tomato, potato (+ wheat for F3) <span class="tag a">ASSUMPTION</span> until gate G1 · Zarai Mandi facts are from its public website (18 Nov 2026); none of its internal data has been seen · <b>Amended by A1 (§9): FYP-I uses synthetic data</b></div>
+
+<h2>1. Source capability table (R3)</h2>
+<table>
+<tr><th>Source</th><th>What it gives</th><th>History</th><th>Access and status</th><th>Licence / publish</th><th>Role</th></tr>
+<tr><td>Zarai Mandi export (via co-supervisor)</td><td>Daily rates per mandi and crop; possibly arrivals; possibly their own forecasts</td><td>Unknown</td><td>Requested (data request = plan2 file 02). Format, columns, publish time <span class="tag u">BELIEF – VERIFY</span>. Public site says "Daily at 7:00 AM" <span class="tag r">REPORTED</span></td><td>Unknown: written permission needed before any number is published</td><td>Primary for the live bot if it arrives; secondary for research unless permission covers publication</td></tr>
+<tr><td>AMIS Punjab public price pages</td><td>Daily min/max (and arrivals for some) per commodity per market, via the date picker</td><td>From 2007 <span class="tag r">REPORTED</span> (plan pack 2); 2022–2025 pages probed 17 Nov 2026 <span class="tag v">VERIFIED</span> (our probe)</td><td>Supervisor-approved route (D-001, verbal; written line pending). Fetch policy rules 1–12 apply; fetcher refuses to run until the contact email is set (D-002)</td><td>"All rights reserved": raw data never redistributed; aggregates and code may be published; source always acknowledged (rules 9–10)</td><td>Primary for research results and F3 (long history); cross-check for Zarai Mandi</td></tr>
+<tr><td>Open-Meteo</td><td>Daily rain and temperature history; forecasts</td><td>Decades <span class="tag r">REPORTED</span></td><td>Free API, no key <span class="tag u">BELIEF – VERIFY</span> terms for non-commercial use</td><td>Attribution</td><td>F1/F3 weather features</td></tr>
+<tr><td>Pakistan Bureau of Statistics CPI</td><td>Monthly CPI</td><td>Long</td><td>Public PDFs/tables</td><td>Public</td><td>Real prices for F3</td></tr>
+<tr><td>OGRA diesel price</td><td>Fortnightly fuel price notifications</td><td>Long</td><td>Public notifications</td><td>Public</td><td>F2 transport cost</td></tr>
+<tr><td>OpenStreetMap + OSRM</td><td>Road distance and time between points</td><td>n/a</td><td>Public demo server for small volumes, or a local OSRM instance <span class="tag u">BELIEF – VERIFY</span> usage limits</td><td>ODbL attribution</td><td>F2 distances (cached once per origin district × mandi)</td></tr>
+<tr><td>Crop Reporting Service (area sown)</td><td>Area estimates</td><td>Varies</td><td>Public reports; release dates unknown</td><td>Public</td><td>Optional F3 feature, only if released before the issue date</td></tr>
+</table>
+<p><b>Answer to R3.</b> AMIS is the only source we can rely on today, and it is enough for every research result. Zarai Mandi data improves the live bot (freshness, coverage) and adds a benchmark if their forecasts are shared, but nothing in the plan may depend on it arriving.</p>
+
+<h2>2. D3 / D4: source and split decisions</h2>
+<div class="box">
+<p><b>D3 → Source-independent design, AMIS as the guaranteed source, Zarai Mandi as the preferred live source.</b></p>
+<ul>
+<li>Every source has its own loader that writes the same canonical table (<code>price_obs</code>). Models never see source formats.</li>
+<li>When both sources report the same mandi × crop × day, precedence for the live bot: Zarai Mandi, then AMIS; for research: AMIS, unless written permission to publish Zarai Mandi-based results exists. The reply always names the source of the number shown.</li>
+<li>Fallback trigger: if no Zarai Mandi sample by Day 3 (Wed 25 Nov) or no export promised by Day 10 (Fri 4 Dec) → AMIS-only for FYP-I, recorded as a decision.</li>
+</ul>
+<p><b>D4 → Splits fixed before any modelling.</b></p>
+<ul>
+<li><b>Lockbox</b>: AMIS data 2025-11-01 → 2026-10-31 (the final 12 months), stored in a separate sealed folder with its SHA-256 written in <code>DECISIONS.md</code>. Opened once, in FYP-II sprint S8.</li>
+<li><b>Development</b>: everything before 2025-11-01, used with rolling-origin folds (file 04).</li>
+<li><b>Live period</b>: from the bot's go-live onward. Live accuracy is reported separately and never mixed with lockbox results.</li>
+<li>Published numbers (report, paper) use AMIS unless D3's permission condition is met.</li>
+</ul>
+</div>
+<div class="warn"><span class="tag c">CORRECTED</span> 22 Nov: D3 and D4 are amended by A1 (§9). FYP-I runs on team-generated synthetic data; the real data and the real lockbox move to FYP-II S1.</div>
+
+<h2>3. Canonical schema (D5)</h2>
+<h3>3.1 price_obs (one row per source × mandi × crop × grade × market day)</h3>
+<table>
+<tr><th>Field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+<tr><td>obs_id</td><td>bigint PK</td><td>✓</td><td></td></tr>
+<tr><td>source</td><td>enum AMIS / ZM</td><td>✓</td><td></td></tr>
+<tr><td>mandi_id, crop_id</td><td>FK</td><td>✓</td><td>Canonical IDs from the gazetteers (§4)</td></tr>
+<tr><td>grade</td><td>text</td><td>–</td><td>As reported, normalised to a small set (e.g. A/B, red/white onion) <span class="tag u">BELIEF – VERIFY</span> per source</td></tr>
+<tr><td>market_date</td><td>date</td><td>✓</td><td>The trading day the price is for</td></tr>
+<tr><td>reported_at</td><td>timestamptz</td><td>✓</td><td><b>When the price became knowable.</b> Real publish time if the source gives it; otherwise <code>market_date</code> + the assumed lag (default: available from 18:00 PKT the same day <span class="tag a">ASSUMPTION</span>, tested in leakage test L2)</td></tr>
+<tr><td>min_pkr100kg, max_pkr100kg, avg_pkr100kg</td><td>numeric</td><td>≥ 1</td><td>Canonical unit: PKR per 100 kg (per-40 kg × 2.5)</td></tr>
+<tr><td>unit_raw, value_raw</td><td>text, numeric</td><td>✓</td><td>Exactly what the source printed, for audit</td></tr>
+<tr><td>arrivals_qty, arrivals_unit</td><td>numeric, text</td><td>–</td><td>Where reported</td></tr>
+<tr><td>outlier_flag</td><td>enum OK / SUSPECT / REJECTED</td><td>✓</td><td>§6</td></tr>
+<tr><td>raw_ref, raw_sha256</td><td>text</td><td>✓</td><td>Points to the saved raw file (fetch policy rule 8)</td></tr>
+</table>
+<h3>3.2 Other tables</h3>
+<table>
+<tr><th>Table</th><th>Key fields</th></tr>
+<tr><td>crop</td><td>crop_id (ONION, TOMATO, POTATO, WHEAT…), name_en, name_ur, perishability_class (HIGH/MED/LOW), default_unit, covered (bool)</td></tr>
+<tr><td>crop_alias</td><td>alias_norm, crop_id, kind (OFFICIAL / COMMON / MISSPELLING / URDU_SCRIPT / VOICE_STT / PUNJABI)</td></tr>
+<tr><td>mandi</td><td>mandi_id, name_en, name_ur, city, district, province, lat, lon, source_ids (AMIS market id, ZM id), covered (bool)</td></tr>
+<tr><td>place / place_alias</td><td>Districts and cities with centroids; aliases (Urdu, spellings); place → candidate mandis</td></tr>
+<tr><td>distance</td><td>origin_key (district or rounded pin), mandi_id, road_km, drive_min, computed_at</td></tr>
+<tr><td>weather_daily, macro_monthly</td><td>district, date, rain_mm, tmax, tmin, is_forecast, issued_at · month, cpi_index, diesel_pkr_litre</td></tr>
+<tr><td>forecast</td><td>run_id, crop_id, mandi_id, issue_date, target_date, p10, p50, p90, reasons[], model_version, ps_id</td></tr>
+<tr><td>outlook</td><td>run_id, crop_id, region, issue_month, target_month, p10, p50, p90, prob_below, prob_near, prob_above, model_version, ps_id</td></tr>
+<tr><td>series_coverage</td><td>crop_id, mandi_id, window, pct_days, eligible_f1 (bool), live_mae: the coverage gate the bot checks before answering F1/F2</td></tr>
+<tr><td>data_health</td><td>run date, source, rows loaded, rows rejected, latest market_date, status</td></tr>
+</table>
+<p>Bot-side tables (users, subscriptions, conversation state, message log, queue) are defined in file 06 §4 and file 08 §8.</p>
+
+<h2>4. Crop and place gazetteers (D5)</h2>
+<h3>4.1 Normalisation before lookup (text and voice transcripts alike)</h3>
+<ol>
+<li>Lowercase; strip punctuation; collapse spaces; Urdu-script tokens mapped to a Roman key (پیاز → pyaz, ٹماٹر → tamatar, آلو → aloo, گندم → gandum).</li>
+<li>Spelling canonicalisation: piaz, payaz, pyaaz → pyaz · timatar, tamater → tamatar · alu, aaloo → aloo · kanak (Punjabi) → gandum.</li>
+<li>Number words (shared with the quantity normaliser, §5): ek, do, teen … sau, hazaar, dedh, dhai, sawa, saade, paune.</li>
+</ol>
+<h3>4.2 Example aliases</h3>
+<table>
+<tr><th>Canonical</th><th>Aliases (examples)</th></tr>
+<tr><td>ONION</td><td>onion, pyaz, piaz, payaz, پیاز, ganda (Punjabi) <span class="tag u">BELIEF – VERIFY</span></td></tr>
+<tr><td>TOMATO</td><td>tomato, tamatar, timatar, ٹماٹر</td></tr>
+<tr><td>POTATO</td><td>potato, aloo, alu, آلو</td></tr>
+<tr><td>WHEAT</td><td>wheat, gandum, kanak, گندم</td></tr>
+<tr><td>Okara (district)</td><td>okara, اوکاڑہ, okarah</td></tr>
+<tr><td>Sahiwal (district)</td><td>sahiwal, saiwal, ساہیوال</td></tr>
+</table>
+<h3>4.3 Place resolution (same pattern as Manzil's location resolver)</h3>
+<ol>
+<li>Exact alias hit on a mandi → RESOLVED (mandi).</li>
+<li>Exact alias hit on a city/district → RESOLVED (place) with its candidate mandis; F2 uses all of them, "price now" shows the main one and names it.</li>
+<li>Location pin → nearest district centroid; origin = the pin itself for distances. Pin outside the covered provinces → OUT_OF_COVERAGE.</li>
+<li>Fuzzy (trigram) on aliases: one candidate ≥ 0.85 with margin ≥ 0.15 → RESOLVED and echoed with the canonical name; otherwise AMBIGUOUS (ask with ≤ 3 buttons).</li>
+<li>A place in another province ("Hyderabad", "Peshawar") → OUT_OF_COVERAGE: "Abhi sirf Punjab ki mandiyon ka data hai."</li>
+<li>Nothing found → UNKNOWN: say so and list how to send a pin. The LLM never invents a place or a mandi ID.</li>
+</ol>
+
+<h2>5. Unit and quantity rules (D5)</h2>
+<table>
+<tr><th>Farmer token</th><th>Canonical</th><th>Rule</th></tr>
+<tr><td>mann, maund, man, من</td><td>40 kg</td><td>Default display unit for farmers</td></tr>
+<tr><td>kg, kilo, کلو</td><td>1 kg</td><td></td></tr>
+<tr><td>ton, tonne</td><td>1,000 kg</td><td></td></tr>
+<tr><td>bori, bag, بوری</td><td>varies</td><td><b>Always ask</b> ("bori kitne kilo ki hai?"), unless the crop has a standard bag recorded in <code>crop.default_bag_kg</code> <span class="tag u">BELIEF – VERIFY</span> with traders (R7)</td></tr>
+<tr><td>crate, peti (tomato)</td><td>varies</td><td>Ask; never assume</td></tr>
+<tr><td>no unit ("50 pyaz")</td><td>–</td><td>Ask; never assume</td></tr>
+</table>
+<ul>
+<li>Money display: "Rs 2,850–3,000 fi mann (40 kg)". Large sums: "≈ Rs 1,47,000" (South Asian grouping). Never another currency.</li>
+<li>Number words: sau = 100, hazaar = 1,000, lakh = 100,000; dedh = 1.5, dhai = 2.5, sawa X = X + 0.25, saade X = X + 0.5, paune X = X − 0.25 (same table as Manzil D11, reused).</li>
+<li>Dates: "aaj", "kal" (ambiguous: tomorrow or yesterday; future tense → tomorrow), "agle hafte" = days 1–7, month names in Urdu and English; all in PKT.</li>
+</ul>
+
+<h2>6. Quality rules</h2>
+<ul>
+<li>Outlier flag SUSPECT when the mid price moves more than 4 robust standard deviations from the series' 28-day median, or min > max, or the value is ≥ 5× its neighbours on the same day <span class="tag a">ASSUMPTION</span>, tuned in the audit (E1).</li>
+<li>SUSPECT rows are excluded from alerts and from "price now" until the next day confirms them; they stay in the table for audit.</li>
+<li>A series is eligible for F1/F2 only if it has ≥ 60% of trading days in the last 12 months and a recent quote within 3 trading days (plan pack 2 rule, kept).</li>
+</ul>
+
+<h2>7. Frozen demo snapshot (for file 10 scenarios)</h2>
+<ul>
+<li><b>S-DEMO</b>: a database dump of the synthetic dataset (A1, §9) taken after the generated load of <b>Fri 11 Dec 2026</b> with forecast run <b>R-20261211</b>, frozen and tagged. The jury demo runs on it, so every expected answer can be computed in advance.</li>
+<li><code>scripts/expected_answers.py</code> computes the golden answer for each scenario from S-DEMO (latest rate, F1 range, F2 top-3 with net rupees, F3 outlook if available) and writes <code>demo/golden/*.json</code>. Success = the bot's reply facts equal the golden file.</li>
+<li>Coverage required in S-DEMO: onion, tomato and potato, each with ≥ 5 eligible Punjab mandis including Lahore, Okara and Sahiwal; distances cached for origins Okara, Sahiwal, Kasur and Lahore.</li>
+<li>A <code>demo_reset.sh</code> restores S-DEMO in under 2 minutes.</li>
+</ul>
+
+<h2>8. D5: Canonical data model and normalisation → DECIDED</h2>
+<ul>
+<li>One canonical price table in PKR per 100 kg, with raw value and unit kept; <code>reported_at</code> on every row enforces the timing rule.</li>
+<li>Hand-curated crop and place gazetteers with Urdu-script, spelling, Punjabi and voice-STT aliases; the LLM picks only from resolver candidates.</li>
+<li>Farmer-facing unit: per mann (40 kg). "Bori", "crate" and missing units are always asked about, never assumed.</li>
+<li>The same normalisers serve the bot (text and voice) and the data loaders, so both sides speak the same units.</li>
+</ul>
+
+<h2 class="pb">9. Amendment A1 (22 Nov 2026): synthetic data for FYP-I, real data in FYP-II</h2>
+<p><b>New fact</b> <span class="tag v">VERIFIED</span> (team decision, 22 Nov 2026): the team creates its own data for the FYP-I demo and execution; the original data is provided in FYP-II. D3 and D4 above are <span class="tag c">CORRECTED</span> as follows. Everything else in this file (schema, gazetteers, units, quality rules, S-DEMO) still applies; only the source of the rows changes.</p>
+<table>
+<tr><th>Decision</th><th>Before A1</th><th>After A1</th></tr>
+<tr><td>D3 source</td><td>AMIS guaranteed, Zarai Mandi preferred; fallback triggers Day 3 / Day 10</td><td><b>FYP-I</b>: one synthetic source (<code>source = SYN</code>) generated by the team straight into the canonical schema. <b>FYP-II S1</b>: the real data (co-supervisor export; AMIS public pages under the fetch policy as the backup) through its own loader. Fallback triggers removed.</td></tr>
+<tr><td>D4 splits</td><td>AMIS lockbox 2025-11 → 2026-10 sealed in W2</td><td><b>FYP-I</b>: the lockbox procedure is rehearsed end to end on a synthetic holdout year. <b>FYP-II S1</b>: the final 12 months of the real data are sealed on the day they arrive, before anyone looks beyond a format check; opened once in S8.</td></tr>
+<tr><td>D17 protocol</td><td>S1–S5 frozen at G2</td><td>Unchanged, and stronger: ps_v1 is frozen <b>before any real data is seen</b>, so every real-data result in FYP-II is fully pre-registered.</td></tr>
+<tr><td>FYP-I results</td><td>First measured results</td><td><b>Pipeline verification</b>: on synthetic data the truth is known, so we check that the models recover a planted signal, that ranges reach their nominal coverage, and that no skill is reported on a null dataset. No claim about real-market accuracy is made in FYP-I.</td></tr>
+</table>
+<h3>9.1 Generator specification (<code>data/synthetic/spec.yaml</code> + <code>scripts/make_synthetic.py</code>, owner Taha)</h3>
+<table>
+<tr><th>Component</th><th>How it is generated</th><th>What it tests</th></tr>
+<tr><td>Mandis</td><td>~15 real Punjab mandi names with real public coordinates, incl. Lahore, Okara, Sahiwal, Kasur, Faisalabad, Multan</td><td>F2 distances are real; only the prices are synthetic</td></tr>
+<tr><td>Crops and period</td><td>Onion, tomato, potato daily 2016-01-01 → 2026-12-18 (Mon–Sat, public holidays missing); wheat monthly for F3</td><td>Enough history for rolling folds and leave-future-out</td></tr>
+<tr><td>Price level</td><td>log price = crop base + seasonal curve (harvest-season dip per crop calendar) + inflation trend + mandi offset growing with distance from the main producing district <span class="tag a">ASSUMPTION</span> parameters</td><td>F1 seasonality, F2 spreads</td></tr>
+<tr><td>Dynamics</td><td>Common AR(1) shock per crop + mandi-level AR(1) noise + rare supply jumps</td><td>F1 can beat naive only through the predictable parts</td></tr>
+<tr><td>Arrivals</td><td>Inverse to the seasonal price component, plus noise</td><td>Arrivals feature path</td></tr>
+<tr><td>Defects</td><td>~2% missing days; 3 thin mandis (&lt; 60% coverage); ~0.3% 10× typos; min &gt; max rows; ~5% rows in per-40 kg units; spelling variants of mandi names</td><td>QC flags, unit converters, coverage gate, name matching</td></tr>
+<tr><td>Timing</td><td><code>reported_at</code> = market date 18:00 PKT; ~5% published the next day</td><td>Timing rules T1–T5, leakage tests</td></tr>
+<tr><td>Variants</td><td><b>SYN</b> (with the structure above) and <b>SYN-NULL</b> (same volatility and defects, pure random walk: nothing predictable)</td><td>False-skill check: F1 must beat naive on SYN and must <b>not</b> on SYN-NULL</td></tr>
+<tr><td>Holdout</td><td>The final synthetic year, sealed with the D4 procedure</td><td>Lockbox rehearsal (hash, CI read-guard, witnessed opening)</td></tr>
+<tr><td>Daily feed</td><td><code>make_synthetic.py --day D</code> emits one day's rows</td><td>Batch path (ingest → QC → score) runs as it will in production</td></tr>
+<tr><td>Seed</td><td>Fixed seed; same seed → same file hash; spec and seed frozen at G2</td><td>Reproducibility; no re-tuning to make a model or scenario look good (R-35)</td></tr>
+</table>
+<ul>
+<li><b>Plausibility</b>: price levels and seasonal swings stay inside per-mann ranges written in the spec with their public source <span class="tag a">ASSUMPTION</span>; the realism check E1 compares them and is shown to the supervisor (Day 9).</li>
+<li><b>Labelling</b>: the source name "Demo data (synthetic)" appears in every bot reply, chart caption, report table and slide.</li>
+<li><b>FYP-II switch acceptance test</b>: the real loader writes the same canonical table; the whole pipeline (QC → features → F1/F2/F3 → bot) runs with no code change outside the loader; E2–E5 are rerun on real development folds with the frozen ps_v1.</li>
+</ul>
+</body></html>

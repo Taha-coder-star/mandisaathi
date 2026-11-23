@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>05 LLM and Voice Evaluation</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: R8 · Language Understanding + Voice/STT Evaluation · Resolves D9, D10, D11</h1>
+<div class="sub">Which parser, which LLM, which speech-to-text, how we test them, and the thresholds they must pass</div>
+<div class="meta">Plan pack 3 · File 05 · 22 Nov 2026 · Owners: Umar (pipeline), Ashna (benchmark and scoring) · Vendor facts are labelled; no claim is made about any vendor's accuracy on Punjabi-accented farmer voice notes; that gap is what the benchmark measures · Observations marked "Manzil test" were made by a team member on 2026-10-06</div>
+
+<p><b>Answer to "same pipeline for voice?": YES.</b> Voice adds exactly one pre-step (speech-to-text) and passes <code>modality</code>, STT confidence signals and duration as metadata. Everything after "normalised text" is the same code, prompts and tools.</p>
+<pre>WhatsApp msg ─► [voice? → download → silence/length pre-check → STT primary → (fallback STT)] ─► text + metadata
+typed text ───────────────────────────────────────────────────────────────────────────────────┘
+      ▼
+ conversation state (DB) ─► parser: rule-based first pass ─► LLM turn with tools (≤ 3 iterations) if needed
+      ▼                         tools = deterministic resolvers + reads of forecast/outlook/F2 tables
+ renderer (template facts) ─► validator ─► WhatsApp reply</pre>
+
+<h2>1. Evaluation criteria</h2>
+<table>
+<tr><th>#</th><th>Criterion</th><th>STT measure</th><th>Parser / LLM measure</th></tr>
+<tr><td>1</td><td>Critical slots (intent, crop, place, quantity + unit)</td><td>Critical-slot transcription accuracy</td><td>Exact match after normalisation</td></tr>
+<tr><td>2</td><td>Code-mixing, Urdu script, Punjabi words, informal spelling</td><td>Script consistency; Punjabi words survive</td><td>Parity across EN / Roman Urdu / mixed / Urdu script</td></tr>
+<tr><td>3</td><td>Structured output</td><td>–</td><td>Schema-valid tool arguments; no invented fields</td></tr>
+<tr><td>4</td><td>Tool use</td><td>–</td><td>Correct tool; no number not returned by a tool</td></tr>
+<tr><td>5</td><td>Latency</td><td>p50/p90 for 3–45 s OGG/Opus notes</td><td>p50/p90 per turn</td></tr>
+<tr><td>6</td><td>Cost</td><td>$/audio minute; free quota</td><td>$/turn</td></tr>
+<tr><td>7</td><td>Reliability</td><td>Errors, timeouts, rate limits</td><td>Errors, rate limits (free tiers are low)</td></tr>
+<tr><td>8</td><td>Domain vocabulary</td><td>Keyterm hints (pyaz, mann, Okara, Badami Bagh)</td><td>Handles mandi and crop names without inventing them</td></tr>
+<tr><td>9</td><td>Data terms (Meta §4.7)</td><td>No training on our audio</td><td>No training on our prompts</td></tr>
+</table>
+
+<h2>2. Shortlisted STT options</h2>
+<table>
+<tr><th></th><th>ElevenLabs Scribe v2</th><th>Whisper large-v3 (faster-whisper, self-hosted)</th><th>Gemini audio input</th></tr>
+<tr><td>Urdu evidence</td><td>Urdu WER 3.1% FLEURS / 5.5% Common Voice <span class="tag r">vendor claim</span> on read speech, not farmer speech</td><td>Multilingual; Urdu supported <span class="tag u">BELIEF – VERIFY</span> quality on accented speech</td><td>No published Urdu figure</td></tr>
+<tr><td>Cost</td><td>Free tier ≈ 12 min audio/month (10,000 credits ≈ 330/min) <span class="tag r">REPORTED</span> (Manzil handoff 2026-10-06); Starter $6/month ≈ 90 min</td><td>$0; needs CPU/GPU time (latency on our VM to measure)</td><td>$0 free tier; low rate limits</td></tr>
+<tr><td>Known risks</td><td>Quota runs out during benchmarks</td><td>Known to produce text on silence <span class="tag u">BELIEF – VERIFY</span>; slow on CPU</td><td><b>Invented speech for a silent clip</b> ("He's going to be") <span class="tag v">Manzil test</span>; free-tier inputs used to improve Google products <span class="tag r">REPORTED</span></td></tr>
+<tr><td>Role</td><td>Primary candidate</td><td>Comparator; fallback if quota/latency allows</td><td>Fallback candidate, only behind a silence pre-check, only on team/synthetic audio</td></tr>
+</table>
+<p>Not shortlisted: Azure ur-PK (account/credit-card friction; keep as a comparator if a free account is available), Google Chirp (Urdu support not confirmed), any model we would have to train (Meta §4.7 and time).</p>
+
+<h2>3. Language-understanding options</h2>
+<table>
+<tr><th></th><th>P0 Rule-based parser</th><th>P1 Gemini free tier (gemini-flash-latest)</th><th>P2 Paid no-training LLM (e.g. Claude Haiku or Gemini paid tier)</th></tr>
+<tr><td>How</td><td>Gazetteer lookup + regex for quantity/unit/date + keyword intents</td><td>Tool calling with strict schemas</td><td>Tool calling with strict schemas</td></tr>
+<tr><td>Strength</td><td>Deterministic, instant, free; perfect on clean single-slot messages</td><td>Handles messy, multi-slot, follow-up messages</td><td>Same, with data terms fit for real farmer messages</td></tr>
+<tr><td>Weakness</td><td>Breaks on free word order, negation, follow-ups</td><td>Free-tier data used to improve products and may be human-reviewed <span class="tag r">REPORTED</span> → <b>team and synthetic data only</b>; low rate limits</td><td>Costs money: Haiku 4.5 listed at $1 / $5 per million tokens in Manzil R16 (Anthropic docs, Oct 2026); ≈ 3k in + 0.3k out per turn ≈ $0.005 → user test (≈ 2,000 turns) ≈ $10 <span class="tag a">ASSUMPTION</span> on volume</td></tr>
+<tr><td>Role</td><td>Floor and fallback; always on</td><td>Development, benchmark, FYP-I demo (team phones)</td><td>FYP-II user test with real farmers, if approved (D9)</td></tr>
+</table>
+
+<h2>4. Benchmark design (≈ 105 items + controls)</h2>
+<p><b>All items are written or recorded by the team and volunteers</b>, never collected from farmer chats (Meta §4.7, file 02 R2). Gold data per item: input, gold transcript (voice, Roman and Urdu script), gold slots JSON, expected tool call and arguments, expected outcome (golden answer from S-DEMO, a clarifying question, or an out-of-scope redirect).</p>
+<h3>4.1 Farmer text: 40 messages</h3>
+<table>
+<tr><th>Category</th><th>n</th><th>Examples</th></tr>
+<tr><td>English</td><td>6</td><td>"onion rate in Multan today", "where should I sell 20 maunds of potato from Kasur"</td></tr>
+<tr><td>Roman Urdu</td><td>12</td><td>"Okara mein pyaz ka rate kya hai", "50 mann aloo hai kahan bechoon", spellings "piaz", "timatar", "kro"</td></tr>
+<tr><td>Mixed EN/RU</td><td>8</td><td>"tomato ka next week rate Lahore", "best mandi for 30 mann onion Sahiwal se"</td></tr>
+<tr><td>Urdu script</td><td>4</td><td>"لاہور میں ٹماٹر کا ریٹ"</td></tr>
+<tr><td>Incomplete / ambiguous</td><td>6</td><td>"rate batao" (no crop), "10 bori pyaz" (bag weight?), "Block mandi" (unknown place), "kal ka rate" (yesterday or tomorrow?)</td></tr>
+<tr><td>Out of scope / coverage</td><td>4</td><td>"kapas ka rate" (crop not covered), "Hyderabad mandi" (outside Punjab), "fertilizer kab dalun?", "write a poem"</td></tr>
+</table>
+<p>Coverage targets across the 40: quantities ≥ 12 (mann, kg, ton, bori, number words "sau", "dedh sau"); places ≥ 15 incl. aliases and Urdu script; crops ≥ 4 incl. Punjabi names; horizons ≥ 8 ("aaj", "kal", "agle hafte", "February mein").</p>
+<h3>4.2 Farmer voice: 30 notes + 5 controls</h3>
+<ul>
+<li>Categories: Roman Urdu/spoken Urdu 14, Punjabi-accented Urdu 8, mixed EN/Urdu 5, ambiguous 3. Twelve are spoken versions of text items (paired subset: measures the voice-vs-text gap directly).</li>
+<li>Recording matrix: ≥ 6 speakers (mixed age/gender), ≥ 3 phones (low-end Android, mid Android, iPhone), conditions 12 quiet / 10 indoor noise (fan, TV) / 8 outdoor (street, tractor or market sound), 3–45 s, <b>recorded inside WhatsApp and pulled through our real webhook and media path</b>.</li>
+<li>Controls (not scored in the 30): 2 silent notes, 1 music clip, 1 Pashto or Sindhi note, 1 note over 120 s. Expected: graceful message, zero invented requests.</li>
+</ul>
+<h3>4.3 Multi-turn and commands: 30</h3>
+<ul>
+<li>20 follow-up turns: "aur tamatar?" (crop switch keeps place and quantity), "Lahore ka?" (place switch), "2 number wali ki tafseel" (reference), "agle hafte?" (horizon), "nahi, 80 mann" (correction).</li>
+<li>10 alert commands: subscribe, threshold up/down, list, STOP.</li>
+</ul>
+<h3>4.4 Procedure</h3>
+<ol>
+<li>Run every STT candidate on all voice items → score A.</li>
+<li>Feed gold transcripts and each STT output to each parser option (P0, P1; P2 if approved) → separates STT errors from parser errors.</li>
+<li>Run the full pipeline end to end for the best STT × parser combination → score B–E.</li>
+<li>Repeat LLM runs 3 times; report mean and worst run.</li>
+<li>Reply quality (language mirroring, clarity of the range, honesty) is a 1–5 rubric by 2 raters on 20 sampled replies. WER/CER is reported but not gating.</li>
+</ol>
+
+<h2>5. Acceptance thresholds (become S4, frozen at G2)</h2>
+<table>
+<tr><th>Area</th><th>Metric</th><th>Threshold</th></tr>
+<tr><td rowspan="3">A. Transcription</td><td>Voice items with all critical slots (crop, place, quantity + unit) correctly transcribed</td><td>≥ 85% overall; ≥ 90% quiet</td></tr>
+<tr><td>Invented content on silence/music controls</td><td>0</td></tr>
+<tr><td>Script usable by the parser</td><td>≥ 95%</td></tr>
+<tr><td rowspan="4">B. Understanding</td><td>Intent accuracy, text</td><td>≥ 95%</td></tr>
+<tr><td>Critical-slot exact match, text / voice end-to-end</td><td>≥ 95% / ≥ 90% (gap to paired text ≤ 7 points)</td></tr>
+<tr><td>Clarification asked on designed-ambiguous items / unnecessary questions on clear items</td><td>≥ 90% / ≤ 10%</td></tr>
+<tr><td>Out-of-scope requests redirected (no general chat)</td><td>100%</td></tr>
+<tr><td rowspan="3">C. Grounding</td><td>Correct tool selected</td><td>≥ 95%</td></tr>
+<tr><td>Numbers in replies not present in a tool result</td><td>0</td></tr>
+<tr><td>Forecasts sent for uncovered series</td><td>0</td></tr>
+<tr><td>D. Follow-ups</td><td>Correct target on the 20 follow-up turns</td><td>≥ 90%</td></tr>
+<tr><td rowspan="2">E. Latency</td><td>Text: inbound → first reply</td><td>p50 ≤ 4 s, p90 ≤ 7 s</td></tr>
+<tr><td>Voice (≤ 30 s note): inbound → first reply</td><td>p50 ≤ 7 s, p90 ≤ 10 s</td></tr>
+<tr><td>F. Cost (tracked)</td><td>LLM + STT per turn on the paid option</td><td>≤ $0.01</td></tr>
+</table>
+<p><b>Decision rule.</b> The LLM is the primary parser only if it beats the rule-based parser by ≥ 5 points on text critical-slot match <i>and</i> passes C. Otherwise the rule-based parser is primary and the LLM handles only messages the rules cannot parse. No silent model swap: any change is a recorded decision. An STT option failing A cannot be primary; if none passes A, echo-confirm becomes always-on for voice (one extra tap, demo stays correct).</p>
+
+<h2>6. Voice failure strategy (runtime)</h2>
+<ol>
+<li><b>Pre-checks before any STT call</b>: duration &lt; 1 s → "dobara bhejein"; &gt; 120 s → transcribe the first 120 s and say so; <b>energy/silence check</b> → silent notes never reach an STT (prevents the Gemini invention seen in the Manzil test).</li>
+<li>STT chain: primary → (error / timeout 6 s / empty / garbage) → fallback → (still failing) → "Awaaz samajh nahi aayi, likh kar bhej dein" + alert log.</li>
+<li>Transcript sanity checks: empty, implausible words per second, repeated-token loops, script outside {Latin, Urdu-Arabic, Devanagari}.</li>
+<li><b>Critical-slot echo</b>: if crop, place or quantity came from voice and the resolver was not exact, or a number fails the plausibility band (e.g. 5,000 mann from a smallholder), echo before answering: "Aapne kaha: pyaz, Okara, 50 mann. Sahi? [Haan] [Badlein]".</li>
+<li>Non-agricultural audio (music, chatter): no tool call, polite clarification. Unsupported language: ask to speak Urdu or type.</li>
+<li>Audio is deleted after transcription for farmer messages; benchmark recordings are team-owned and kept.</li>
+</ol>
+
+<h2>7. D9: Language understanding and orchestration → DECIDED</h2>
+<ul>
+<li><b>Pattern</b>: a single code-controlled workflow, not multi-agent and no agent framework. Per message: deterministic pre-processing (dedupe, consent gate, STT) → rule-based parse → if incomplete or messy, one LLM turn with intent-scoped tools (≤ 3 iterations) → deterministic renderer.</li>
+<li><b>Tools</b> (strict schemas, all deterministic): <code>resolve_crop</code>, <code>resolve_place</code>, <code>update_query</code> (slot patch with raw spans), <code>price_now</code>, <code>get_forecast</code>, <code>best_mandis</code>, <code>get_outlook</code>, <code>subscribe</code> / <code>set_alert</code> / <code>stop</code>.</li>
+<li>The LLM passes <b>raw spans</b> ("dedh sau mann", "Okara") and picks among resolver candidates; it never emits a mandi ID, a crop ID or a number of its own.</li>
+<li>Models: FYP-I = rule-based + Gemini free tier on team phones only. FYP-II user test = rule-based + a paid no-training LLM <b>if</b> the supervisor approves ≈ $10–15; otherwise rule-based only for real farmers. Same prompts and tools for any model (one adapter).</li>
+<li><b>Scope guard</b> (Meta §4.7): anything outside prices, mandis, outlooks and alerts gets a fixed redirect.</li>
+</ul>
+<h2>8. D10: STT → DECIDED (subject to benchmark A)</h2>
+<ul>
+<li>Primary: ElevenLabs Scribe v2 with keyterms from the crop and place gazetteers. Fallback: faster-whisper on the VM if its latency fits E, else Gemini audio behind the silence check.</li>
+<li>Normalised text = the STT's native output (Urdu script, Roman or mixed) passed straight to the parser; the gazetteers hold Urdu-script and voice-STT aliases (no transliteration step, as Manzil D18).</li>
+</ul>
+<h2>9. D11: Language and unit policy → DECIDED</h2>
+<table>
+<tr><th>Farmer writes / speaks</th><th>Bot replies in</th></tr>
+<tr><td>English</td><td>English</td></tr>
+<tr><td>Roman Urdu or mixed</td><td>Roman Urdu</td></tr>
+<tr><td>Urdu script (typed)</td><td>Urdu script</td></tr>
+<tr><td>Voice note</td><td>Roman Urdu (English if the note was English); no voice reply in FYP-I</td></tr>
+</table>
+<ul>
+<li>Fixed tokens are never translated or rephrased: mandi canonical names, rupee amounts as digits ("Rs 2,850"), "fi mann (40 kg)", dates as "12 Dec".</li>
+<li>Every range carries the word "andaza"; every outlook carries the caution line; every rate carries its date and source.</li>
+<li><code>preferred_language</code> is stored per farmer and changes only when the farmer clearly switches. First contact always discloses "MandiSaathi ka AI assistant".</li>
+</ul>
+</body></html>

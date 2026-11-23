@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>07 Deployment and Privacy</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: Deployment and Privacy · Resolves D15 and D16 (using R11, R12, R2)</h1>
+<div class="sub">One codebase, one container image, two roles; where it runs at $0; what farmer data we keep and for how long</div>
+<div class="meta">Plan pack 3 · File 07 · 22 Nov 2026 · Owner: Umar (deployment), Taha (privacy wording) · Principle carried from Manzil D12/D13: build the seams once, keep the deployment minimal</div>
+
+<h2>New facts used here</h2>
+<ul>
+<li><b>Public HTTPS webhook required</b>: Meta posts webhooks to an HTTPS URL it can verify <span class="tag v">VERIFIED</span> (webhooks overview). A laptop tunnel works for development but breaks whenever the laptop sleeps.</li>
+<li><b>Free hosting used before</b>: the Manzil demo ran on an AWS Free-plan EC2 t3.small + RDS PostgreSQL + S3, ≈ $32–38/month of free credits, account limited to 6 months or until credits run out; Caddy obtained a certificate for a free <code>sslip.io</code> hostname <span class="tag r">REPORTED</span> (Manzil handoff, 2026-10-06). Eligibility for a new account must be checked <span class="tag u">BELIEF – VERIFY</span>.</li>
+<li><b>Pakistan data protection</b>: the Personal Data Protection Bill is still not law (secondary sources, Apr 2026) <span class="tag r">REPORTED</span>. No localisation duty today.</li>
+<li><b>Meta §4.7</b>: no training on platform data; vendors must not train on what we send (file 02).</li>
+</ul>
+
+<h2>1. Options for hosting (R11)</h2>
+<table>
+<tr><th>Option</th><th>Cost</th><th>Webhook stability</th><th>Fits FYP-I</th><th>Fits FYP-II (Jan–May)</th></tr>
+<tr><td>Laptop + tunnel (cloudflared / ngrok)</td><td>$0</td><td>✗ breaks when the laptop sleeps; URL may change</td><td>Development only</td><td>✗</td></tr>
+<tr><td>AWS Free plan VM (t3.small) + Postgres in Docker on the same VM</td><td>$0 within credits <span class="tag r">REPORTED</span></td><td>✓ Elastic IP + Caddy + sslip.io</td><td>✓</td><td>✓ if the 6-month window covers Dec–May</td></tr>
+<tr><td>Oracle Cloud Always-Free VM</td><td>$0 <span class="tag u">BELIEF – VERIFY</span> capacity in region</td><td>✓</td><td>✓</td><td>✓ (no time limit)</td></tr>
+<tr><td>University server</td><td>$0</td><td>Depends on public HTTPS access</td><td>Ask</td><td>Ask</td></tr>
+</table>
+
+<h2>2. Deployment architecture</h2>
+<pre>Meta Cloud API (test number → fresh SIM in FYP-II)
+        │ webhook (HTTPS, signed)
+        ▼
+┌───────────────────────────────────────────────────┐
+│  mandisaathi (ONE container image)                 │
+│   ├─ web role: webhook verify, dedupe, enqueue     │
+│   ├─ worker role: conversation turns, STT, LLM,    │
+│   │               tools, sending                    │
+│   ├─ batch role: daily ingest → QC → F1 score,      │
+│   │              monthly F3, alerts (same image,    │
+│   │              run by a scheduler entry)          │
+│   └─ adapters: WhatsAppGateway, LLM, STT, Storage   │
+└──────────────┬────────────────────────────────────┘
+               ▼
+        PostgreSQL (one DB: prices, forecasts, state, queue, logs)
+        + a local disk folder for raw source files (hashed, backed up)</pre>
+<ul>
+<li>One VM, Docker Compose: <code>caddy</code>, <code>web</code>, <code>worker</code>, <code>postgres</code>, plus a cron/APScheduler entry for the batch role. No Kubernetes, no Redis, no message broker, no object store (we have no images; audio is transient).</li>
+<li>Research and training run on laptops; the VM only scores with frozen model files committed with their <code>ps_id</code>.</li>
+<li>Seams kept clean from Day 1 (cheap now, expensive later): every external service behind an adapter with keys from env; no secret in the repo (gitleaks in CI); the queue in Postgres; config per environment (dev / demo / user-test).</li>
+<li>Backups: nightly <code>pg_dump</code> + raw folder sync to the private cloud folder (fetch policy rule 12).</li>
+</ul>
+
+<h2>3. Privacy and consent (R12, R2)</h2>
+<table>
+<tr><th>Data</th><th>Stored as</th><th>Retention</th><th>Who sees it</th></tr>
+<tr><td>Phone number</td><td>Encrypted (for sending) + salted hash (for analysis)</td><td>Until STOP or 90 days after last message</td><td>Sending code only; analysis uses the hash</td></tr>
+<tr><td>Message text and transcripts</td><td>message_log</td><td>90 days; then only intent/slot counts</td><td>Team, for debugging and the live evaluation</td></tr>
+<tr><td>Voice audio</td><td>Temporary file</td><td>Deleted after transcription</td><td>STT vendor (no-training setting where available)</td></tr>
+<tr><td>Location pins</td><td>Rounded to ~1 km for distance cache; exact pin not kept after the turn</td><td>Turn only</td><td>–</td></tr>
+<tr><td>Subscriptions</td><td>subscription table</td><td>Until STOP or 30-day lapse</td><td>Scheduler</td></tr>
+<tr><td>User-test questionnaire</td><td>Separate file, linked by a participant code, not by number</td><td>Until the final report</td><td>Team and supervisor</td></tr>
+</table>
+<ul>
+<li><b>Consent text</b> (first message, Roman Urdu and English): who we are (FAST-NUCES student project), that it is an AI assistant, what is stored, that prices are estimates, how to STOP.</li>
+<li><b>Prompts</b>: phone numbers never sent to the LLM; the user is "farmer".</li>
+<li><b>Vendors</b>: free-tier LLM/STT only with team and synthetic data; real farmer messages only through no-training paid tiers or the rule-based path (D9).</li>
+<li><b>User test</b>: written or recorded consent per participant; questionnaire anonymous; ethics wording approved by the supervisor (R14).</li>
+</ul>
+
+<h2>4. D15: Hosting and deployment → DECIDED</h2>
+<ul>
+<li>One container image with web, worker and batch roles; Docker Compose on one free-tier VM with Caddy HTTPS; Postgres in a container with nightly dumps.</li>
+<li>FYP-I: VM up by Day 2 (development may also use a tunnel); FYP-II: same VM unless credits expire, in which case move to Oracle Always-Free (a config change: everything is plain Docker + Postgres).</li>
+</ul>
+<h2>5. D16: Privacy, consent and retention → DECIDED</h2>
+<ul>
+<li>Consent on first contact; STOP deletes; numbers encrypted + hashed; 90-day message retention; audio deleted after transcription; no farmer data to free-tier vendors; no farmer data used to train or tune anything (Meta §4.7).</li>
+<li>Single tenant: no multi-tenant row-level security (Manzil needed it for many agencies; MandiSaathi has one operator). This is a deliberate cut, recorded so nobody adds it "for later".</li>
+</ul>
+</body></html>

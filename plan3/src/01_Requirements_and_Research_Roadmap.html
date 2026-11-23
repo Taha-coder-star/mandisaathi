@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>01 Requirements and Research Roadmap</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: Requirements, Risks and Research Roadmap</h1>
+<div class="sub">Phase: analysis only. No new code is written until every decision below has an answer or an explicit "deferred to FYP-II".</div>
+<div class="meta">Plan pack 3 · File 01 · 22 Nov 2026 · Team: Taha Ahmed (23K-0534), Ashna Jamal (23K-6017), Umar Bin Abid (23K-0009) · Supervisor: Bakhtawar Abbasi · Co-supervisor: [name] · Builds on plan pack 2 (18 Nov) and replaces its planning files; the filled SRS/SDS drafts stay in <code>plan2/docs</code></div>
+
+<div class="box"><b>How to read the status tags.</b> <span class="tag v">VERIFIED</span> checked against an official source, with the source named · <span class="tag r">REPORTED</span> stated by a secondary source or by a person, level noted · <span class="tag a">ASSUMPTION</span> a placeholder value we chose and must confirm · <span class="tag u">BELIEF – VERIFY</span> something we think is true but have not checked. Every BELIEF – VERIFY item is a hypothesis for the research phase (files 02–07), never a fact. WhatsApp platform facts marked VERIFIED were checked against Meta's official documentation on 2026-10-01 during the Manzil AI project (same team member, same platform); they are re-checked when our Meta app is created.</div>
+
+<h2>Context</h2>
+<p>We are building a WhatsApp-first assistant for Pakistani farmers and small traders. It must:</p>
+<ul>
+<li>answer price questions in Urdu, Roman Urdu, English and mixed text, and in Urdu/Punjabi-accented voice notes;</li>
+<li>say <b>what the price should be</b> in nearby mandis over the next days, with an honest range (F1);</li>
+<li>say <b>where to sell</b>: the mandi that pays the most after transport, commission and spoilage (F2);</li>
+<li>say <b>what the price is likely to be at harvest</b>, 3–5 months ahead, before the farmer plants (F3);</li>
+<li>send daily rates and price alerts the farmer asked for.</li>
+</ul>
+<p>The goal for FYP-I (evaluation in the week of 21–23 Dec <span class="tag a">ASSUMPTION</span>) is a convincing, honest demo plus first measured results. The goal for FYP-II (May 2027) is a deployed service, a sealed-lockbox evaluation and a user test. The architecture must serve both without a rewrite.</p>
+<div class="warn"><span class="tag c">CORRECTED</span> 22 Nov (amendment A1, file 03 §9): FYP-I runs on synthetic data the team creates; the original data is provided in FYP-II.</div>
+
+<h2>1. Product understanding (precise statement)</h2>
+<p>A conversational price-advice system with <b>WhatsApp as the only user interface</b> for farmers, and a batch analysis pipeline that produces every number the bot is allowed to say.</p>
+<table>
+<tr><th>Flow</th><th>Input</th><th>System role</th><th>Output</th></tr>
+<tr><td>Price now</td><td>Free-form text or voice ("Lahore pyaz rate?")</td><td>Crop + place extraction → latest observed rate lookup</td><td>Min–max rate per 40 kg, date, source</td></tr>
+<tr><td>Short-term forecast (F1)</td><td>"Agle hafte tamatar ka rate?"</td><td>Read the stored daily forecast for that crop × mandi</td><td>P10–P90 range for 1–7 days, reason in plain words</td></tr>
+<tr><td>Where to sell (F2)</td><td>Crop, quantity, origin (text, voice or location pin)</td><td>Deterministic net-revenue ranking over the stored forecasts</td><td>Top 3 mandis with net rupees and the gain over the nearest mandi</td></tr>
+<tr><td>Harvest outlook (F3)</td><td>"February mein tamatar ka rate kya hoga?"</td><td>Read the stored monthly outlook</td><td>Range + chance of above / near / below normal + caution line</td></tr>
+<tr><td>Alerts and digests</td><td>"Jab tamatar 2500 se upar ho to batana", "roz rate bhejo"</td><td>Subscription stored; scheduler evaluates after the daily data load</td><td>Alert or digest message (template outside the 24 h window)</td></tr>
+<tr><td>Daily pipeline (no user)</td><td>Price exports / pages, weather, CPI, diesel</td><td>Ingest → validate → features → score F1 (daily), F3 (monthly)</td><td>Rows in <code>forecast</code> and <code>outlook</code> tables</td></tr>
+</table>
+<p><b>What it is NOT</b>, at least initially: a trading platform, a buyer–seller marketplace, a farmer app, a general chatbot, or a replacement for Zarai Mandi or AMIS rate pages. The AI is the project's assistant and never claims to be a person or a government service.</p>
+
+<h2>2. Functional requirements</h2>
+<h3>2a. CONFIRMED (stated by the team or the supervisor)</h3>
+<p><b>Farmer side</b></p>
+<ul>
+<li><b>FR-F1</b> Receive farmer messages on WhatsApp; no app install, no login.</li>
+<li><b>FR-F2</b> Understand English, Roman Urdu, Urdu script and code-mixed text, including informal spelling ("pyaz/piaz/payaz", "tamatar/timatar").</li>
+<li><b>FR-F3</b> Accept Urdu voice notes as first-class input (treated exactly like typed text).</li>
+<li><b>FR-F4</b> Accept a location pin as the farmer's origin.</li>
+<li><b>FR-F5</b> Extract: intent, crop, place (mandi, city or district), quantity + unit, date or horizon.</li>
+<li><b>FR-F6</b> Return the latest observed rate with its date and source.</li>
+<li><b>FR-F7</b> Return a 1–7 day price forecast as a range, never a single promise (F1).</li>
+<li><b>FR-F8</b> Rank mandis by net revenue after transport, commission and spoilage (F2).</li>
+<li><b>FR-F9</b> Return a harvest-month outlook 3–5 months ahead with a caution line (F3).</li>
+<li><b>FR-F10</b> Subscribe to daily rates and threshold alerts; STOP unsubscribes and deletes.</li>
+<li><b>FR-F11</b> Reply in the farmer's language; numbers in the farmer's unit (usually per mann of 40 kg).</li>
+</ul>
+<p><b>Data and analysis side</b></p>
+<ul>
+<li><b>FR-D1</b> Load Zarai Mandi data (via the co-supervisor) and AMIS public data into one canonical price table. FYP-I uses team-generated synthetic data in the same schema (A1).</li>
+<li><b>FR-D2</b> Daily ingest, quality check and scoring without manual steps.</li>
+<li><b>FR-D3</b> Every reported result is reproducible from a commit, a parameter set and a data hash.</li>
+<li><b>FR-D4</b> Final results are measured once on a sealed lockbox year.</li>
+</ul>
+<h3>2b. IMPLIED (follow from the confirmed ones; need sign-off)</h3>
+<ul>
+<li>An echo of what was understood ("Pyaz, Okara, 50 mann") so a wrong parse is visible and correctable with one tap.</li>
+<li>One clarifying question when a critical slot is missing, never a guess (e.g. "Kaunsi fasal?").</li>
+<li>A coverage rule: crops and mandis without enough data get an honest "is ka andaza nahi de sakte", not a forecast.</li>
+<li>A freshness rule: if the latest rate is older than 2 days, the reply says so with the date.</li>
+<li>Conversation memory per farmer: last crop, place, quantity, and the last list shown (so "2 number wali" works).</li>
+<li>Consent on first contact: what is stored and how to stop.</li>
+<li>Source acknowledgement in replies (AMIS rule 10 of the fetch policy; the same courtesy for Zarai Mandi).</li>
+<li>An audit trail: which forecast run and which data produced each number sent.</li>
+</ul>
+<h3>2c. CANDIDATES (not requested; decide in or out)</h3>
+<ul>
+<li>Voice replies (text-to-speech) for farmers who cannot read.</li>
+<li>"What should I plant?" comparison across crops (two F3 outlooks side by side).</li>
+<li>Price reports from farmers ("aaj Okara mein 2,800 mila") as a crowd signal.</li>
+<li>Weather advice, input prices, government support prices.</li>
+<li>A web dashboard for farmers (contradicts the WhatsApp-only goal).</li>
+<li>A read-only admin view for the team and jury (data freshness, accuracy, message log).</li>
+</ul>
+
+<h2>3. Non-functional requirements</h2>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Status</th></tr>
+<tr><td>NFR-1</td><td>Reply latency on WhatsApp: text p90 ≤ 7 s, voice (≤ 30 s note) p90 ≤ 10 s</td><td>Target proposed (from Manzil R16); confirm in file 05</td></tr>
+<tr><td>NFR-2</td><td>Accuracy: never send a number that is not in a tool result; never send a forecast for an uncovered series</td><td>Critical</td></tr>
+<tr><td>NFR-3</td><td>Research validity: no information from the future in any feature; lockbox opened once</td><td>Critical (carried from plan packs 1–2)</td></tr>
+<tr><td>NFR-4</td><td>Freshness: the daily forecast run finishes before 10:00 PKT on trading days</td><td>Needs the source publish time (R3)</td></tr>
+<tr><td>NFR-5</td><td>WhatsApp policy compliance: opt-in, 24 h window, templates, the AI-provider rule</td><td>Mandatory</td></tr>
+<tr><td>NFR-6</td><td>Privacy: phone numbers and messages never leave our server except to the LLM/STT vendor; numbers masked in prompts</td><td>Implied</td></tr>
+<tr><td>NFR-7</td><td>Reliability: webhook retries, idempotency, no double replies, no lost alerts</td><td>Implied</td></tr>
+<tr><td>NFR-8</td><td>Cost: $0 for development; the user test costs under PKR 10,000 in total</td><td>ASSUMPTION (budget not confirmed)</td></tr>
+<tr><td>NFR-9</td><td>Observability: replay any conversation and see which tool output produced each number</td><td>Strongly advised</td></tr>
+<tr><td>NFR-10</td><td>Data licence: raw data is never published (fetch policy rule 9; Zarai Mandi terms to confirm)</td><td>Mandatory</td></tr>
+<tr><td>NFR-11</td><td>Demo-readiness for FYP-I in 4 working weeks</td><td>Confirmed</td></tr>
+</table>
+
+<h2>4. User roles</h2>
+<table>
+<tr><th>Role</th><th>Description</th><th>Open questions</th></tr>
+<tr><td>Farmer</td><td>Sells produce at a mandi or to a middleman</td><td>Smallholder or larger grower? Literacy level? Do they sell themselves or through an arhti?</td></tr>
+<tr><td>Small trader / arhti</td><td>Buys at one mandi and sells at another</td><td>Secondary user, or out of scope? Their questions differ (spreads, not net revenue)</td></tr>
+<tr><td>Team admin</td><td>Watches data health and the message log</td><td>Needs only a read-only view; WhatsApp commands may be enough</td></tr>
+<tr><td>Data partner (co-supervisor / Zarai Mandi)</td><td>Provides the export</td><td>Format, frequency, who signs the permission</td></tr>
+<tr><td>Jury / examiner</td><td>Tries the bot and reads the results</td><td>Must be able to message the bot from their own phone (test-number limit)</td></tr>
+</table>
+
+<h2>5. Farmer journey (target, demo level)</h2>
+<ol>
+<li><b>Entry</b>: the farmer messages the MandiSaathi number from a shared link, QR poster or contact. (Which number? Test number allows ~5 phones only; see R1.)</li>
+<li><b>Greeting, disclosure and consent</b>: "Main MandiSaathi ka AI assistant hoon… aapka number aur fasal yaad rakhi jayegi. Band karne ke liye STOP likhein."</li>
+<li><b>Question</b>: one message ("50 mann pyaz Okara, kahan bechoon?") or several turns. The bot normalises units (mann, kg, bori, ton → kg) and places (district, city, mandi, pin) and asks only about missing critical slots.</li>
+<li><b>Answer</b>: deterministic facts rendered from tool results (rates, ranges, ranking) plus a one-line plain explanation.</li>
+<li><b>Refinement</b>: "aur tamatar?", "Lahore ka kya?", "2 number wali mandi ki tafseel", "agle hafte?" update the state and re-run the tool.</li>
+<li><b>Subscription</b>: "roz rate bhejo" / "2500 se upar ho to batana" → confirmation with buttons.</li>
+<li><b>Dormant</b>: after 24 h of silence, the bot may write only with approved templates <span class="tag v">VERIFIED</span> (Meta pricing doc; Manzil R5).</li>
+</ol>
+<p><b>Edge cases to design for</b>: greetings only; a crop we do not cover (cotton, rice); a place outside coverage (Sindh); "bori" without weight; Punjabi words; questions about pesticides or loans (out of scope); abuse; a trader fishing for bulk data; voice notes with tractor noise; forwarded audio.</p>
+
+<h2>6. Daily data journey (no user)</h2>
+<ol>
+<li>06:00 PKT: load yesterday's and today's published rates from each source; save raw files with hashes.</li>
+<li>Validate: schema, units, name matching to <code>mandi</code> and <code>crop</code> IDs, outlier flags, duplicate source rows.</li>
+<li>Build features under the information-set rule (only data reported before the issue day).</li>
+<li>Score F1 for every covered series; write P10/P50/P90 with a <code>run_id</code>. Monthly: score F3.</li>
+<li>Evaluate alerts against the new data; send digests and alerts.</li>
+<li>Write a data-health row; if anything failed, the bot keeps answering from the last good run and says its date.</li>
+</ol>
+<p><b>Risks</b>: the source publishes late or skips holidays; a mandi changes its name; a typo multiplies a rate by 10; the export has no "published at" time, which breaks the timing rule.</p>
+
+<h2>7. Data lifecycle</h2>
+<pre>raw source file ─► raw store (hash, retrieved_at) ─► price_obs (canonical, outlier_flag)
+     ─► features (as of issue day) ─► forecast / outlook (run_id, model_version)
+     ─► reply facts (message_log keeps run_id + tool payload) ─► evaluation (live accuracy table)</pre>
+<ul>
+<li>Every price row keeps its source, its raw reference and the time we learned it (<code>reported_at</code>).</li>
+<li>Forecast rows are never overwritten: a re-run gets a new <code>run_id</code>, so live accuracy can be measured later.</li>
+<li>Farmer data: number (encrypted + hashed), language, crops followed, approximate district, subscriptions, message log. Retention policy is decision D16.</li>
+<li>Voice audio: kept only until transcribed (benchmark recordings are team-made and kept).</li>
+</ul>
+
+<h2>8. Major technical challenges</h2>
+<ol>
+<li><b>Roman Urdu / Punjabi-tinted farmer language</b>: no standard spelling; local crop names; numbers as words ("sau mann", "dedh sau"). We have no evaluation set yet; we must build one.</li>
+<li><b>Units</b>: mann/maund (40 kg), bori (50 kg or 100 kg, varies by crop and place), crate (tomato), dozen; sources report per 40 kg or per 100 kg. Wrong normalisation means wrong rupees.</li>
+<li><b>Place ambiguity</b>: a city can have several mandis (Lahore: Badami Bagh and others <span class="tag u">BELIEF – VERIFY</span>); district vs city names; spellings ("Sahiwal/Saiwal"); location pins far from any covered mandi.</li>
+<li><b>Hallucination control</b>: the LLM must only say numbers that come from our tools, including number words in Urdu.</li>
+<li><b>Timing honesty</b>: a forecast for day t may use only data reported before t. If the source has no publish time, we must assume a lag and test it.</li>
+<li><b>Thin and gappy series</b>: Sundays, Eid, missing mandis; some crop × mandi series are too sparse to model.</li>
+<li><b>Long horizon, small sample</b>: about 17 harvest seasons since 2007 per crop × region; skill claims must respect that.</li>
+<li><b>Cost parameters for F2</b>: transport rate, commission, market fee and spoilage vary and are not published in one place.</li>
+<li><b>WhatsApp limits</b>: 24 h window, templates for alerts, buttons ≤ 3, list ≤ 10 rows, test number ≤ 5 recipients <span class="tag v">VERIFIED</span> / <span class="tag r">REPORTED</span> (file 02).</li>
+<li><b>Voice</b>: Urdu STT may output Urdu script, Hindi script or garbage on noise; silence can produce invented text (seen on 2026-10-06 with Gemini audio in the Manzil project).</li>
+<li><b>Data permission</b>: Zarai Mandi data may be usable for the demo but not for published results.</li>
+<li><b>Novelty</b>: a Namal FYP has the same headline scope; Zarai Mandi sells a "forecast" service. Our claims must rest on measured evidence.</li>
+</ol>
+
+<h2>9. Unknowns that require research</h2>
+<h3>R-A: WhatsApp / Meta platform (gates the channel)</h3>
+<ul>
+<li><b>R1</b> Access path and numbers: direct Cloud API vs BSP vs Twilio sandbox; test-number recipient limit; a real number without business verification; messaging limits for alerts.</li>
+<li><b>R2</b> Meta's AI-provider rule (§4.7) and the ban on training models with platform data: does a farmer price assistant qualify as "business-specific AI"? What does the data-use ban mean for our message test set and any parser training?</li>
+<li><b>R9</b> Message formats and alert templates: buttons, lists, location request, template categories (is a user-requested price alert "utility" or "marketing"?), PK template prices, opt-in rules.</li>
+</ul>
+<h3>R-B: Data and domain</h3>
+<ul>
+<li><b>R3</b> Data sources and permission: Zarai Mandi export (format, mandis, crops, history length, publish time, licence to publish results); AMIS coverage since 2007; weather (Open-Meteo), CPI (PBS), diesel (OGRA), road distances (OSRM/OpenStreetMap).</li>
+<li><b>R4</b> Units, crop names, grades and the mandi list: which mandis exist per city, their coordinates, Urdu and local names, how each source reports grades.</li>
+<li><b>R7</b> F2 cost parameters: transport per km by vehicle size, commission, market fee, unloading, spoilage per day; from traders and the co-supervisor.</li>
+<li><b>R13</b> Prior work and competitors: the Namal FYP, Zarai Mandi's paid forecast, AMIS app, Kissan helplines, published papers.</li>
+<li><b>R14</b> User-test recruitment and ethics: who, how many, consent form, what we may record.</li>
+</ul>
+<h3>R-C: AI / technical</h3>
+<ul>
+<li><b>R5</b> Short-term forecasting: which baselines are hard to beat at 1–7 days for daily mandi prices; global gradient boosting vs per-series models; interval calibration.</li>
+<li><b>R6</b> Long-term outlook: is there skill 3–5 months ahead over climatology; what inputs are known at issue time (area sown, last season's price).</li>
+<li><b>R8</b> LLM and STT for farmer Urdu: rule-based parser vs LLM tool calling; which model at $0 or near $0; which STT handles Punjabi-accented Urdu voice notes; data-use terms of each vendor.</li>
+<li><b>R10</b> Conversation state: what must persist for follow-ups ("aur tamatar?", "2 number wali").</li>
+<li><b>R11</b> Hosting at $0 with a public HTTPS webhook for FYP-I and FYP-II.</li>
+<li><b>R12</b> Pakistan data protection status and consent wording.</li>
+</ul>
+
+<h2>10. Assumptions we must NOT make</h2>
+<ul>
+<li>✗ That the co-supervisor's Zarai Mandi data will arrive, on time, with history, or with permission to publish results.</li>
+<li>✗ That we may scrape zaraimandi.com or its app API (fetch policy rules 2 and 11 forbid it).</li>
+<li>✗ That a personal WhatsApp number or an unofficial library (whatsapp-web.js, Baileys) is acceptable. It breaks WhatsApp's terms and risks a ban.</li>
+<li>✗ That the Meta test number can serve 10–15 user-test farmers or let a jury member message from their own phone.</li>
+<li>✗ That we can message farmers freely after 24 h, or that daily digests are free.</li>
+<li>✗ That any AI chatbot is automatically allowed on WhatsApp Business.</li>
+<li>✗ That the LLM understands farmer Roman Urdu, Punjabi words or Urdu number words without testing.</li>
+<li>✗ That "mann" or "bori" means one fixed weight everywhere, or that every source reports per 40 kg.</li>
+<li>✗ That a city name identifies one mandi.</li>
+<li>✗ That the source's "market date" is the day we could have known the price.</li>
+<li>✗ That a model beats yesterday's price just because it is complex; or that F3 has any skill at all.</li>
+<li>✗ That the cheapest-looking far mandi is a good recommendation when the forecast difference is inside the noise.</li>
+<li>✗ That the LLM may state a price, range or ranking that a tool did not return.</li>
+<li>✗ That free-tier LLM/STT vendors do not keep or train on what we send them.</li>
+<li>✗ That real farmer messages may be used to train or tune any model (Meta §4.7).</li>
+<li>✗ That a jury will accept "same as Namal but on WhatsApp" as novelty.</li>
+</ul>
+
+<h2>11. Decisions needed before coding</h2>
+<table>
+<tr><th>#</th><th>Decision</th><th>Depends on research</th></tr>
+<tr><td>D1</td><td>WhatsApp access path: direct Cloud API vs BSP vs Twilio sandbox</td><td>R1, R9</td></tr>
+<tr><td>D2</td><td>Number strategy: test number vs a fresh-SIM real number, and when</td><td>R1, R14</td></tr>
+<tr><td>D3</td><td>Primary data source and the fallback (Zarai Mandi export, AMIS public, both)</td><td>R3</td></tr>
+<tr><td>D4</td><td>Splits, lockbox period and which source the published numbers use</td><td>R3, R5</td></tr>
+<tr><td>D5</td><td>Canonical data model and normalisation (units, crop/mandi gazetteer, grades, timing field)</td><td>R3, R4</td></tr>
+<tr><td>D6</td><td>F1 method: baselines, main model, interval calibration, coverage rule</td><td>R5</td></tr>
+<tr><td>D7</td><td>F3 method: baseline, model, output format, honesty rule</td><td>R6</td></tr>
+<tr><td>D8</td><td>F2 decision rule and cost parameters</td><td>R7</td></tr>
+<tr><td>D9</td><td>Language understanding and orchestration: rule-based vs LLM tool calling; model choice</td><td>R8, R2</td></tr>
+<tr><td>D10</td><td>Speech-to-text approach</td><td>R8</td></tr>
+<tr><td>D11</td><td>Language and unit policy for replies</td><td>R8, R4</td></tr>
+<tr><td>D12</td><td>Reply presentation formats on WhatsApp</td><td>R9</td></tr>
+<tr><td>D13</td><td>Conversation-state model</td><td>R10</td></tr>
+<tr><td>D14</td><td>Alerts and digests: templates, window, frequency caps, cost</td><td>R9, R1</td></tr>
+<tr><td>D15</td><td>Hosting and deployment for FYP-I and FYP-II</td><td>R11</td></tr>
+<tr><td>D16</td><td>Privacy, consent and retention</td><td>R2, R12</td></tr>
+<tr><td>D17</td><td>Evaluation protocol: pre-registered criteria, gates, lockbox procedure, bot benchmark</td><td>R5, R6, R8</td></tr>
+<tr><td>D18</td><td>Scope cuts for FYP-I vs FYP-II</td><td>All</td></tr>
+</table>
+
+<h2>12. Ordered research roadmap (next documents)</h2>
+<p>Ordered by "what blocks the most decisions" and "what has the longest lead time".</p>
+<ol>
+<li><b>WhatsApp access and policy (R1, R2, R9 limits)</b> → file 02. Output: go/no-go, number plan (D1, D2). Create the Meta app the same day: template approval has lead time.</li>
+<li><b>Data sources, permission and data model (R3, R4)</b> → file 03. Output: source decision and fallback, canonical schema, unit and gazetteer rules, demo snapshot (D3, D4, D5). Send the data request the same day.</li>
+<li><b>Forecasting and decision methods (R5, R6, R7)</b> → file 04. Output: F1, F3, F2 methods with baselines and pass criteria (D6, D7, D8, D17).</li>
+<li><b>Language and voice evaluation (R8)</b> → file 05. Output: benchmark design (≈ 75 messages + 30 voice notes + controls), thresholds, model and STT picks (D9, D10, D11).</li>
+<li><b>WhatsApp UX, alerts and state (R9, R10)</b> → file 06. Output: reply formats, alert design, state model (D12, D13, D14).</li>
+<li><b>Deployment and privacy (R11, R12)</b> → file 07. Output: D15, D16.</li>
+<li><b>Architecture proposal</b> → file 08 (RFC), then an adversarial review → file 09 (red team).</li>
+<li><b>FYP-I scope</b> → file 10 (scenarios, success criteria, cut list) and <b>execution plan</b> → file 11 (day-by-day tasks, gates).</li>
+</ol>
+
+<h2>Verification of this phase</h2>
+<p>This phase produces no new code. It is done when:</p>
+<ul>
+<li>every BELIEF – VERIFY item is confirmed or corrected with a cited source, or moved to the open-items list with an owner;</li>
+<li>every decision D1–D18 has an answer or an explicit "deferred to FYP-II", recorded in <code>mandi/DECISIONS.md</code> with its evidence.</li>
+</ul>
+</body></html>

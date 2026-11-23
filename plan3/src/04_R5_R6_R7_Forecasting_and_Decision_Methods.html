@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>04 Forecasting and Decision Methods</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>MandiSaathi: R5 / R6 / R7 · Forecasting and Where-to-Sell Methods · Resolves D6, D7, D8</h1>
+<div class="sub">Option comparisons, the selected pipelines, baselines, timing rules and the pre-registered pass criteria</div>
+<div class="meta">Plan pack 3 · File 04 · 22 Nov 2026 · Owners: Taha (F1), Ashna (F3, evaluation), Umar (F2) · Builds on plan pack 2 file 04; nothing here is a result yet · Every threshold gets an ID in <code>params/ps_v1.yaml</code>, frozen at gate G2</div>
+
+<p><b>One rule for all three:</b> the forecasts are computed by the batch pipeline and stored; the bot only reads them. The research backtests and the live pipeline import the same package (<code>mandi.features</code>, <code>mandi.models</code>, <code>mandi.decide</code>), so a number on WhatsApp is computed exactly as in the evaluation.</p>
+<pre>price_obs ─► features (as of issue day, rules T1–T8) ─► F1 daily model ─► forecast table ─┐
+          └► monthly real panel ─────────────────────► F3 monthly model ─► outlook table ─┤
+distance + costs ────────────────────────────────────────────────────────► F2 engine ◄────┘ (reads forecast)
+                                                                              │
+                                                     bot tools read these tables only</pre>
+
+<h2>1. F1 short-term forecaster (R5 → D6)</h2>
+<h3>1.1 Option comparison</h3>
+<table>
+<tr><th>Requirement</th><th>A. Naive / seasonal baselines only</th><th>B. Per-series SARIMA / ETS</th><th>C. Global gradient boosting (LightGBM quantile)</th><th>D. Deep models (LSTM, TFT, foundation TS models)</th></tr>
+<tr><td>Beats yesterday's price at 1–3 days</td><td>Is the baseline</td><td>Often not on noisy daily prices <span class="tag u">BELIEF – VERIFY</span> (literature review A1.1)</td><td>Likely, via cross-mandi spreads and arrivals <span class="tag u">BELIEF – VERIFY</span></td><td>Unclear at our data size</td></tr>
+<tr><td>Hundreds of short, gappy series</td><td>✓</td><td>⚠ one model per series; fails on gaps</td><td>✓ one model learns across series</td><td>⚠ needs much more data</td></tr>
+<tr><td>Calibrated range (P10–P90)</td><td>Empirical residuals</td><td>✓ analytic, often miscalibrated</td><td>✓ quantile loss + conformal correction</td><td>✓ but heavy</td></tr>
+<tr><td>Explainable reasons</td><td>Trivial</td><td>⚠</td><td>✓ SHAP → reason codes</td><td>✗</td></tr>
+<tr><td>Laptop training time, ops risk</td><td>None</td><td>Low</td><td>Low (minutes)</td><td>High</td></tr>
+</table>
+<p><b>Verdict:</b> C as the proposed model, A as the bar it must clear, B on the 20 longest series as the classical comparison. D is excluded for FYP: no requirement shows a problem it solves better at our data size. Revisit only if C fails S1 and the error analysis points to long-memory patterns.</p>
+<h3>1.2 Selected pipeline</h3>
+<ol>
+<li><b>Target</b>: y = log M(s, t+h−1) − log M(s, t−1) for series s (crop × mandi × grade), issue day t, horizon h ∈ 1…7; M = mid price (min+max)/2. The last usable quote is t−1 (rule T1).</li>
+<li><b>Features (FS-S)</b>: own lags and rolling stats; spread to the regional median and to the 3 nearest mandis; arrivals (if any) vs seasonal norm; weekday, day-of-year, days to Ramadan/Eid, holidays; rain in the production district (observed, and forecast as issued on t−1); crop, mandi, perishability, h.</li>
+<li><b>Baselines</b>: B-N naive (price stays at M(t−1)), B-SN same weekday last week, B-SR spread reversion halfway to the regional median.</li>
+<li><b>Model</b>: LightGBM, one model per quantile (0.1, 0.5, 0.9) across all series and horizons; ≈ 30 tuning trials on development folds only.</li>
+<li><b>Range</b>: split-conformal correction per crop × horizon on the latest calibration fold to reach 80% coverage.</li>
+<li><b>Coverage gate</b>: only series in <code>series_coverage.eligible_f1</code> get a forecast; others get "andaza nahi" in the bot.</li>
+<li><b>Reasons</b>: top SHAP drivers mapped to reason codes (ARRIVALS_HIGH, RAMADAN_NEAR, RAIN_RECENT, SPREAD_HIGH…) with fixed Urdu/English text.</li>
+</ol>
+<h3>1.3 Timing rules (carried, enforced by tests)</h3>
+<table>
+<tr><th>Rule</th><th>Content</th><th>Test</th></tr>
+<tr><td>T1</td><td>A feature for issue day t uses only rows with <code>reported_at</code> &lt; t 00:00 PKT</td><td>L1: shift-by-one test; L2: assumed-lag test (delay all data one more day; accuracy must not collapse)</td></tr>
+<tr><td>T2</td><td>Rolling statistics end at t−1</td><td>L3: feature recomputation from truncated data equals the stored feature</td></tr>
+<tr><td>T3</td><td>Weather forecasts are the ones issued on t−1, not the realised weather</td><td>L4</td></tr>
+<tr><td>T4–T5</td><td>Scaling, encoders and conformal scores fit on training folds only</td><td>L5</td></tr>
+<tr><td>T6</td><td>Lockbox untouched until S8</td><td>Hash check in CI</td></tr>
+<tr><td>T7–T8</td><td>F3 features as known at the end of month M−k−1; CPI as published by then</td><td>L4, L5 on the monthly panel</td></tr>
+<tr><td>—</td><td>Planted-signal fixture: a synthetic series with a known lead signal must be learned (proves the pipeline can find skill, so a null is valid)</td><td>L6</td></tr>
+</table>
+<h3>1.4 Evaluation and pass criterion</h3>
+<ul>
+<li>Rolling origin: train before the fold, test the next 3 months, roll by 3 months; ≥ 6 development folds.</li>
+<li>Metrics: MAE (PKR/100 kg), MASE vs B-N, pinball loss, coverage and width of the 80% range, direction accuracy for moves > 5%.</li>
+<li><b>S1</b> (lockbox): pooled MASE &lt; 1 at h = 1–3 with the 95% block-bootstrap upper bound &lt; 1; coverage 75–85%. Valid null: "short-term prices behaved like a random walk in the test year".</li>
+</ul>
+
+<h2>2. F3 long-term outlook (R6 → D7)</h2>
+<h3>2.1 Option comparison</h3>
+<table>
+<tr><th>Requirement</th><th>A. Climatology (monthly average real price)</th><th>B. Linear quantile regression on deviations</th><th>C. Small LightGBM quantile</th><th>D. Structural supply model (area sown → price)</th></tr>
+<tr><td>Sample size (~17 seasons per crop × region)</td><td>✓</td><td>✓ few parameters</td><td>⚠ overfits easily</td><td>⚠ area data timing unknown</td></tr>
+<tr><td>Cobweb effect (last season's price → planting → harvest price)</td><td>✗</td><td>✓ as a feature</td><td>✓</td><td>✓ explicitly</td></tr>
+<tr><td>Honest probabilities</td><td>Terciles of history</td><td>✓ quantiles → tercile probabilities</td><td>✓</td><td>⚠</td></tr>
+<tr><td>Explainable to farmers</td><td>✓ "normal price for February"</td><td>✓ "last season was low, so…"</td><td>⚠</td><td>✓</td></tr>
+</table>
+<p><b>Verdict:</b> B as the main model, A as the bar, C only if it beats B in development folds. D is FYP-II optional, only if area-sown data is released before issue dates (R6 open item).</p>
+<h3>2.2 Selected pipeline</h3>
+<ol>
+<li>Target: z = log R(c, r, M) − log Clim(c, r, month(M)); R = monthly average real price (CPI-deflated), issued at M−k, k ∈ {3, 4, 5}.</li>
+<li>Features (FS-L): z same month last year; mean z over last harvest season; latest z, 3-month trend, 6-month volatility; sowing-window rain/temperature anomalies as observed by issue time; optional area anomaly.</li>
+<li>Output: P10/P50/P90 in nominal rupees (re-inflated at the latest CPI) + probabilities of below / near / above normal (tercile of past z).</li>
+<li><b>Honesty rule</b>: where development skill ≤ 0 for a crop, the bot ships climatology ("is mahine ka aam rate") and says the outlook adds nothing for that crop.</li>
+</ol>
+<h3>2.3 Evaluation and pass criterion</h3>
+<ul>
+<li>Leave-future-out from 2015: train on years before Y, issue outlooks for Y; lockbox year sealed. Power analysis rerun for the monthly design at G1.</li>
+<li>Metrics: CRPS and pinball vs climatology, tercile hit rate, Brier skill, 80% coverage.</li>
+<li><b>S3</b>: pooled CRPS skill &gt; 0 with the bootstrap CI lower bound &gt; 0. Valid null: "harvest-month prices were not predictable beyond seasonal averages 3–5 months ahead".</li>
+</ul>
+
+<h2>3. F2 where-to-sell engine (R7 → D8)</h2>
+<h3>3.1 Option comparison</h3>
+<table>
+<tr><th>Requirement</th><th>A. Highest forecast price</th><th>B. Net revenue after costs (P50)</th><th>C. B + risk check on P10</th><th>D. Learned recommender</th></tr>
+<tr><td>Accounts for transport, fees, spoilage</td><td>✗</td><td>✓</td><td>✓</td><td>⚠ needs outcome data we lack</td></tr>
+<tr><td>Avoids recommending a far mandi on noise</td><td>✗</td><td>⚠</td><td>✓</td><td>?</td></tr>
+<tr><td>Explainable ("Rs 2,500 zyada, transport ke baad bhi")</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td></tr>
+<tr><td>Testable on history</td><td>✓</td><td>✓</td><td>✓</td><td>✗ no realised-choice data</td></tr>
+</table>
+<p><b>Verdict:</b> C, fully deterministic, no LLM inside.</p>
+<h3>3.2 Selected rule</h3>
+<pre class="eq">Net(m) = Q × P̂(m, t+ℓm) × (1 − cm) − T(dm, Q) − Fm − Q × P̂ × δcrop × ℓm</pre>
+<ul>
+<li>Q quantity (100 kg units); P̂ the F1 P50 at arrival day; ℓm travel delay (0 home mandi; 1 day if road distance > 80 km <span class="tag a">ASSUMPTION</span>); cm commission (default 6% <span class="tag a">ASSUMPTION</span>); T = road_km × cost per km for the vehicle size implied by Q (from the diesel price); Fm market/unloading fees; δ spoilage per day (tomato 4%, onion/potato 1%, wheat 0% <span class="tag a">ASSUMPTION</span>).</li>
+<li><b>Candidates</b>: eligible mandis within 150 km road distance <span class="tag a">ASSUMPTION</span> (F2-radius in ps_v1).</li>
+<li><b>Risk rule</b>: a mandi other than the nearest is recommended only if its net gain over the nearest is still &gt; 0 when computed with its P10 and the nearest's P50. Otherwise the answer is "Nazdeeki mandi theek hai" with the numbers.</li>
+<li><b>Output</b>: top 3 with net rupees, the gain over the nearest, the cost assumptions used (so the farmer can say "mera transport mehnga hai").</li>
+<li>All cost parameters are R7 open items: confirm with ≥ 3 traders or the co-supervisor; sensitivity analysis (±50% transport, commission 4–8%, spoilage ×0.5–×2) reported with every F2 result.</li>
+</ul>
+<h3>3.3 Evaluation and pass criterion</h3>
+<ul>
+<li>Backtest on history: for each origin district × crop × day, compare the realised net price at the recommended mandi (PROP) with NEAREST and YESTERDAY-BEST (the mandi with the highest price yesterday).</li>
+<li><b>S2</b>: mean realised gain of PROP over NEAREST &gt; 0 PKR/100 kg with the 95% CI lower bound &gt; 0. Valid null: "after costs, the nearest mandi was as good as our advice".</li>
+</ul>
+
+<h2>4. Decisions</h2>
+<div class="box">
+<p><b>D6: F1 → DECIDED.</b> Global LightGBM quantile model with split-conformal ranges, over three baselines (naive, seasonal naive, spread reversion) and SARIMA on the longest series; rolling-origin evaluation; coverage gate; SHAP reason codes. Rules T1–T8 with tests L1–L6.</p>
+<p><b>D7: F3 → DECIDED.</b> Linear quantile regression on deviations from climatology (small LightGBM only if it wins in development); tercile probabilities; climatology shipped where there is no skill.</p>
+<p><b>D8: F2 → DECIDED.</b> Deterministic net-revenue ranking over F1 P50 with a P10 risk rule and a 150 km candidate radius; cost parameters are assumptions until R7 interviews, always shown with a sensitivity analysis.</p>
+<p><b>D17 (part): Evaluation protocol → DECIDED.</b> Pre-registered criteria S1–S3 (above) plus S4–S5 (file 05, file 10) frozen at G2; lockbox opened once in S8; valid-null wording agreed in advance.</p>
+</div>
+</body></html>

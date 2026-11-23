@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>00 README and Index</title><link rel="stylesheet" href="style.css"></head><body>
+
+<h1>00 · README and Index</h1>
+<div class="sub">MandiSaathi plan pack 3: analysis → decisions → architecture → red team → scope → execution, in the Manzil document method</div>
+<div class="meta">Team: Taha Ahmed (23K-0534), Ashna Jamal (23K-6017), Umar Bin Abid (23K-0009) · Supervisor: Bakhtawar Abbasi · Co-supervisor: [name] · FAST-NUCES Karachi · Pack version 3.0, 22 Nov 2026</div>
+
+<h2>1. What changed from plan pack 2</h2>
+<table>
+<tr><th style="width:22%">Area</th><th style="width:36%">Plan pack 2 (18 Nov)</th><th>Plan pack 3 (this pack)</th></tr>
+<tr><td>Method</td><td>Specs and a week-by-week plan</td><td>Analysis before code: requirements split into confirmed / implied / candidate, 14 research items (R1–R14) resolving 18 numbered decisions (D1–D18), an RFC, a red-team review that amended it, a frozen scope, then a day-by-day plan</td></tr>
+<tr><td>Data in FYP-I</td><td>Zarai Mandi (pending) + AMIS</td><td><b>Synthetic data the team generates</b> in the canonical schema (amendment A1, file 03 §9); the original data is provided in FYP-II; the real lockbox is sealed on arrival in FYP-II S1</td></tr>
+<tr><td>LLM role</td><td>Tool-calling assistant + number checker</td><td>The LLM only parses and phrases; facts are rendered by templates; the validator rejects digits, Urdu number words and promise words; rule-based parser first (D9)</td></tr>
+<tr><td>Voice</td><td>Whisper STT</td><td>Scribe v2 primary, comparator and fallback behind a silence pre-check; STT inside the serialised turn; quantity always echoed (D10, R-24)</td></tr>
+<tr><td>WhatsApp</td><td>Features listed</td><td>Meta access, §4.7 policy, pricing, test-number limit and templates researched (D1, D2); reply mock-ups, alert caps, state model (D12–D14)</td></tr>
+<tr><td>Demo</td><td>Rehearsed scenarios</td><td>5 exact scenarios with golden answers computed from a frozen snapshot (S-DEMO), measurable pass thresholds, ordered cut list</td></tr>
+<tr><td>Plan</td><td>5 weeks, per person</td><td>20 working days, task IDs with dependency, binary DONE condition and CRIT/PAR/OPT tag; gates M1–M6; FYP-II sprints S1–S10</td></tr>
+<tr><td>Kept</td><td colspan="2">Timing rules T1–T8, leakage tests L1–L6, baselines, pre-registered S1–S5 with valid-null wording, fetch policy, decision register, team roles</td></tr>
+</table>
+
+<h2>2. Files and reading order</h2>
+<table>
+<tr><th style="width:38%">File</th><th>What it is for</th><th style="width:18%">Read first by</th></tr>
+<tr><td><b>01_Requirements_and_Research_Roadmap</b></td><td>Product statement, FR/NFR, journeys, challenges, R1–R14, assumptions we must not make, D1–D18, roadmap</td><td>Everyone</td></tr>
+<tr><td>02_R1_R2_WhatsApp_Access_Policy_Pricing</td><td>Meta access, test number, §4.7, pricing, templates → D1, D2</td><td>Umar</td></tr>
+<tr><td>03_R3_R4_Data_Sources_and_Data_Model</td><td>Sources, splits, canonical schema, gazetteers, units, quality rules, S-DEMO → D3, D4, D5; <b>§9 amendment A1: synthetic data generator spec</b></td><td>Taha</td></tr>
+<tr><td>04_R5_R6_R7_Forecasting_and_Decision_Methods</td><td>F1, F3, F2 options and pipelines, timing and leakage rules, S1–S3 → D6, D7, D8</td><td>Taha, Ashna, Umar</td></tr>
+<tr><td>05_R8_LLM_and_Voice_Evaluation</td><td>Parser and STT options, benchmark set, thresholds A–F → D9, D10, D11</td><td>Ashna, Umar</td></tr>
+<tr><td>06_R9_R10_WhatsApp_UX_Alerts_and_State</td><td>Reply mock-ups, alert rules, conversation state → D12, D13, D14</td><td>Umar, Ashna</td></tr>
+<tr><td>07_D15_D16_Deployment_and_Privacy</td><td>Hosting, deployment, privacy and retention → D15, D16</td><td>Umar, Taha</td></tr>
+<tr><td><b>08_Final_Architecture_RFC</b></td><td>Components C1–C17, flows, boundaries, failure table, build order, D1–D18 summary</td><td>Everyone</td></tr>
+<tr><td><b>09_Red_Team_Review</b></td><td>36 issues (P0/P1/P2), critical blockers, 14 amendments to the RFC</td><td>Everyone</td></tr>
+<tr><td><b>10_FYP1_Scope</b></td><td>Must-haves, exclusions, 5 demo scenarios with golden answers, success thresholds, cut order</td><td>Everyone + supervisor</td></tr>
+<tr><td><b>11_Execution_Plan</b></td><td>Days 1–20 (23 Nov – 18 Dec), critical path, work split, risks, gates, FYP-II sprints</td><td>Everyone, daily</td></tr>
+<tr><td>12_Handoff_Template</td><td>How to report a finished or blocked task with evidence</td><td>Everyone</td></tr>
+</table>
+<p>Precedence when files disagree: amendment A1 (file 03 §9) &gt; red-team amendments (file 09 §D) &gt; RFC (file 08) &gt; research files 02–07. Files 10 and 11 already include all amendments.</p>
+
+<h2>3. Conventions</h2>
+<table>
+<tr><th>Tag</th><th>Meaning</th></tr>
+<tr><td><span class="tag v">VERIFIED</span></td><td>We checked it ourselves (date given) or it is an official primary source</td></tr>
+<tr><td><span class="tag r">REPORTED</span></td><td>A secondary source, a document or a person says so; not checked by us</td></tr>
+<tr><td><span class="tag a">ASSUMPTION</span></td><td>Chosen value we act on until evidence changes it</td></tr>
+<tr><td><span class="tag u">BELIEF – VERIFY</span></td><td>Must be checked before anything depends on it</td></tr>
+<tr><td><span class="tag c">CORRECTED</span></td><td>An earlier statement or decision replaced by a newer one (reason given)</td></tr>
+<tr><td><span class="tag p0">P0</span> <span class="tag p1">P1</span> <span class="tag p2">P2</span></td><td>Red-team severity: wrong number/advice or invalid claim / visible malfunction / degradation</td></tr>
+<tr><td><span class="tag crit">CRIT</span> <span class="tag par">PAR</span> <span class="tag opt">OPT</span></td><td>Execution tags: critical path / parallel / first to drop</td></tr>
+</table>
+<ul>
+<li><b>IDs</b>: R# research item · D# decision · C# component (RFC) · R-## red-team issue · E# FYP-I result · S# success criterion · M#/G# gate · <code>x.y</code> task (day.number).</li>
+<li><b>Meta facts</b> (test-number limit, §4.7, pricing, button/list limits) were verified for Manzil on 1 Oct 2026 and carried over; re-check on Day 1 during Meta setup.</li>
+<li><b>Data rules that never change</b>: no scraping of Zarai Mandi; no redistribution of raw AMIS data; synthetic data is always labelled; secrets never in the repo.</li>
+</ul>
+
+<h2>4. How to rebuild the PDFs</h2>
+<pre>cd D:/fyp/plan3
+sh render.sh 00_README_Index 01_Requirements_and_Research_Roadmap ... 12_Handoff_Template
+# HTML sources in src/, PDFs in pdf/; file 09 is generated by make09.py (edit the issue list there)</pre>
+</body></html>
