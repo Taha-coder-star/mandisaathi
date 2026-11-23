@@ -1,7 +1,7 @@
 speaker_id,first_name,age_band,gender,accent,phone,consent_date
-S1,,,,urdu,P1,
-S2,,,,urdu,P2,
-S3,,,,urdu,P3,
-S4,,,,urdu,P1,
-S5,,,,punjabi,P2,
-S6,,,,punjabi,P3,
+S1,self (project owner),,,urdu,P1,2026-11-23
+S2,TBD,,,urdu,P2,
+S3,supervisor (to ask),,,urdu,P3,
+S4,TBD,,,urdu,P1,
+S5,Ammi,,F,punjabi,P2,
+S6,TBD (Punjabi accent),,,punjabi,P3,
