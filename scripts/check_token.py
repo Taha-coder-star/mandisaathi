@@ -7,14 +7,17 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 GRAPH = "https://graph.facebook.com/v25.0"
 NEEDED_SCOPES = {"whatsapp_business_messaging", "whatsapp_business_management"}
 
 
-def load_env(path=Path(__file__).resolve().parent.parent / ".env"):
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
+
+def load_env(path=ENV_PATH):
     env = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -49,7 +52,7 @@ def main():
     if NEEDED_SCOPES - set(d.get("scopes", [])):
         sys.exit(f"FAIL token lacks scopes: {', '.join(NEEDED_SCOPES - set(d.get('scopes', [])))}")
     exp = d.get("expires_at", 0)
-    expiry = "never (permanent)" if exp == 0 else datetime.fromtimestamp(exp, timezone.utc).isoformat()
+    expiry = "never (permanent)" if exp == 0 else datetime.fromtimestamp(exp, UTC).isoformat()
 
     nums = get(f"{env['WA_WABA_ID']}/phone_numbers", access_token=token).get("data", [])
     num = next((n for n in nums if n["id"] == env["WA_PHONE_NUMBER_ID"]), None)
