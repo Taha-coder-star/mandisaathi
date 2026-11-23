@@ -6,3 +6,5 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 build/
+# Benchmark audio: volunteers voices, kept out of git; manifest.csv holds the sha256 of each file.
+data/benchmark/audio/
