@@ -9,12 +9,15 @@ docker run --rm "$IMG" python -m mandi.batch
 
 echo "== web"
 docker run -d --name smoke-web -p 8000:8000 "$IMG" >/dev/null
+# No Postgres here, so /health answers 503 (db down); any 200/503 proves the web role is serving.
 ok=
 for _ in $(seq 20); do
-  if curl -fs localhost:8000/health; then ok=1; break; fi
+  code=$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/health || true)
+  case $code in 200|503) ok=1; break ;; esac
   sleep 1
 done
-[ -n "$ok" ] || { docker logs smoke-web; echo "web: /health never returned 200"; exit 1; }
+[ -n "$ok" ] || { docker logs smoke-web; echo "web: /health never answered"; exit 1; }
+echo "/health -> $code"
 echo
 
 echo "== worker"
