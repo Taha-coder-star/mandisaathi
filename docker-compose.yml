@@ -1,16 +1,55 @@
-# Local/VM stack. Postgres and Caddy join in task 2.1.
+# One VM, one compose file (file 07 §2): caddy, web, worker, postgres; batch on demand.
+# Local: docker compose up -d   ·   VM: same, with SITE_HOST=<ip-with-dashes>.sslip.io in .env
 x-app: &app
   build: .
   image: mandisaathi
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://mandi:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mandi
+  depends_on:
+    postgres: { condition: service_healthy }
+  restart: unless-stopped
 
 services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: mandi
+      POSTGRES_DB: mandi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mandi -d mandi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped  # no published port: only the app containers reach it
+
   web:
     <<: *app
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]  # public traffic goes through caddy only
+
   worker:
     <<: *app
     command: ["python", "-m", "app.worker"]
+
   batch:
     <<: *app
     command: ["python", "-m", "mandi.batch"]
+    restart: "no"
     profiles: [batch]  # not started by `up`; run with: docker compose run --rm batch
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_HOST: ${SITE_HOST:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data  # keeps the TLS certificate across restarts (Let's Encrypt rate limits)
+    depends_on: [web]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:

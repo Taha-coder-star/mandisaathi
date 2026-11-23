@@ -54,3 +54,14 @@ Amendment A1 (file 03 §9): synthetic data in FYP-I, real data in FYP-II.
 - The file 03 D3 fallback triggers (Day 3 / Day 10) are removed. FYP-I results are pipeline verification only; no claim about real-market accuracy.
 - Supersedes D-001's "AMIS only" for FYP-I.
 - Real-data format request: draft `docs/requests/2026-11-23_real_data_request.md`. **Sent: 2026-11-23 on WhatsApp** (by Taha). G1 (task 10.2, Fri 4 Dec) needs it acknowledged or chased.
+
+## D-009 · 2026-11-23 · Taha · CONFIRMED
+Task 2.1 hosting (resolves file 07 R11 for FYP-I):
+- **AWS EC2 t3.micro** (free tier eligible, 1 GiB RAM + 2 GiB swap file), **us-east-2 (Ohio)**, Ubuntu 24.04, 20 GiB gp3. Ohio instead of Mumbai: Meta webhooks and the LLM/STT APIs are US-side; farmers only talk to WhatsApp, never to the VM. t3.micro instead of t3.small: enough for caddy + web + worker + postgres with swap, and free-tier covered.
+- Account: the AWS account is registered to Ashna; I (Taha) operate it. It must stay accessible through May 2027.
+- Elastic IP **3.13.120.80** → hostname **3-13-120-80.sslip.io**; Caddy gets the Let's Encrypt certificate (HTTP → 308 → HTTPS).
+- Security group: 22 only from EC2 Instance Connect (`3.16.146.0/29`, the us-east-2 range in ip-ranges.json); 80/443 open. Postgres has no published port; web binds 127.0.0.1:8000, reachable only through Caddy.
+- Deploy: read-only GitHub deploy key on the VM, `git pull` + `sudo docker compose up -d --build`. `.env` copied by hand, `chmod 600`. No registry, no deploy pipeline (one operator).
+- Free-tier / credit end date: **TBD** (check Billing → Credits). If it ends before the final evaluation (week of 24 May 2027), move to Oracle Always-Free per file 07 §4 (plain Docker, config change only).
+- Not yet: nightly `pg_dump` backups (file 07 §2); added once real rows exist (task 3.2).
+- DONE evidence: `curl -i https://3-13-120-80.sslip.io/health` → `200 {"status":"ok","db":"ok"}`, 2026-11-23 18:09 UTC.
