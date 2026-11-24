@@ -65,3 +65,18 @@ Task 2.1 hosting (resolves file 07 R11 for FYP-I):
 - Free-tier / credit end date: **TBD** (check Billing → Credits). If it ends before the final evaluation (week of 24 May 2027), move to Oracle Always-Free per file 07 §4 (plain Docker, config change only).
 - Not yet: nightly `pg_dump` backups (file 07 §2); added once real rows exist (task 3.2).
 - DONE evidence: `curl -i https://3-13-120-80.sslip.io/health` → `200 {"status":"ok","db":"ok"}`, 2026-11-23 18:09 UTC.
+
+## D-010 · 2026-11-24 · Taha · CONFIRMED
+Task 2.3 schema v1 (`app/migrations/001_schema_v1.sql`, runner `app/migrate.py`). Where RFC §8 / file 03 §3 do not say, I chose:
+- **17 tables, not 18:** `usage_event` deferred to the first task that writes usage (LLM turn 11.2 or the alert budget). No plan file defines its columns; guessing them now would be design without a user.
+- **Conversation tables** (`wa_user`, `query_state`, …) go in with task 6.2; **alert tables** (`subscription`, `alert_event`) with the alerts task. Each as a new numbered migration.
+- **CHECK instead of Postgres ENUM** for `source`, `outlier_flag`, `crop_alias.kind`, `crop.perishability_class`, job/outbound status: adding a value later is a one-line migration.
+- **`price_obs.source` allows `SYN`, `SYN-NULL`, `AMIS`, `ZM`.** A1 calls SYN-NULL a variant of SYN; storing it as its own source value lets both variants sit in one table and be told apart.
+- `price_obs.grade` stays nullable (file 03); the observation key is `UNIQUE NULLS NOT DISTINCT (source, mandi_id, crop_id, grade, market_date)` (Postgres 15+). `min > max` is **not** rejected by the DB: the generator injects it and QC must flag it.
+- `series_coverage.window` → **`window_days`** (`WINDOW` is a reserved word in Postgres).
+- `place.candidate_mandi_ids text[]` for place → candidate mandis (no join table; no FK on array elements, so the gazetteer load must check them).
+- Alias keys are `(alias_norm, crop_id)` / `(alias_norm, place_id)`: designed-ambiguous aliases (task 4.3) need one alias → several targets.
+- `data_health.status` is plain text; task 12.1 defines its values. No p10 ≤ p50 ≤ p90 CHECK on forecasts (separately fitted quantile models can cross; the model code must sort them).
+- **Infra column sets are ASSUMPTION** (RFC §8 only names the tables): `inbound_event` (unique `dedup_key` = WAMID or status key; `user_key` text for BSUID "US.…"; `payload` jsonb, **task 3.1 must strip/hash phone numbers before insert**, file 07 §3), `job` (claim index `(priority, run_at) WHERE status = 'queued'`, lower priority runs first; lease via `locked_until`), `outbound_message` (`UNIQUE (job_id, seq)`).
+- **Migrations run automatically on deploy:** compose service `migrate` (one-shot, `python -m app.migrate`); web/worker/batch wait for `service_completed_successfully`. Runner: one transaction per file, `schema_migrations(version, checksum, applied_at)`, advisory lock, sha256 checksum (CRLF normalised) so an edited applied migration fails loudly.
+- DONE evidence: `tests/test_migrate.py` (empty DB → 17 tables; rerun → history unchanged; rollback; checksum; 3 concurrent migrators apply once) against Postgres 16 locally and in CI.

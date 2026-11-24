@@ -7,7 +7,7 @@ x-app: &app
   environment:
     DATABASE_URL: postgresql://mandi:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mandi
   depends_on:
-    postgres: { condition: service_healthy }
+    migrate: { condition: service_completed_successfully }  # no app role touches the DB before the schema is current
   restart: unless-stopped
 
 services:
@@ -24,6 +24,13 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped  # no published port: only the app containers reach it
+
+  migrate:  # one-shot: applies app/migrations, exits 0; a failed migration keeps web/worker/batch down
+    <<: *app
+    command: ["python", "-m", "app.migrate"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
 
   web:
     <<: *app
