@@ -1,0 +1,172 @@
+# MandiSaathi synthetic data spec (task 2.4; plan file 03 §9.1, amendment A1).
+# Read by scripts/make_synthetic.py (task 3.2). FROZEN at gate G2 (task 10.3): after that, no edit, no re-seed.
+# Every value that is a modelling choice and not a public fact is tagged ASSUMPTION.
+# Rule: nothing here is shaped to produce a particular demo answer (risk 9, file 11). Coverage is structural only.
+
+meta:
+  spec_version: 1
+  label: "Demo data (synthetic)"          # appears in every bot reply, chart caption, report table, slide
+  seed: 20261124                          # one fixed integer; same seed + same spec -> identical file hash
+  rng: >-
+    numpy PCG64; one child stream per (variant, crop, component) from SeedSequence(seed).spawn(), keyed by the
+    names below, so adding a mandi or crop never shifts another stream. Output rows sorted by
+    (market_date, crop_id, mandi_id); CSV with fixed float format; hash = sha256 of the file bytes.
+  currency: PKR
+  tz: Asia/Karachi
+
+period:
+  start: 2016-01-01
+  end: 2026-12-18                         # inclusive
+  trading_days: Mon-Sat                   # Sunday never traded
+  holidays:
+    fixed_mmdd: ["02-05", "03-23", "05-01", "08-14", "11-09", "12-25"]   # Kashmir Day, Pakistan Day, Labour Day, Independence Day, Iqbal Day, Quaid Day
+    moving:                               # ASSUMPTION: approximate lunar dates; synthetic, not an official calendar
+      anchor_year: 2016
+      drift_days_per_year: -11            # Islamic calendar moves ~11 days earlier each Gregorian year
+      blocks:
+        - {name: eid_ul_fitr,  anchor: 2016-07-06, days: 3}
+        - {name: eid_ul_adha,  anchor: 2016-09-12, days: 3}
+        - {name: ashura,       anchor: 2016-10-12, days: 2}
+  wheat: {frequency: monthly, region: PUNJAB, note: "F3 panel; one regional value per month, no mandi dimension"}
+  holdout:
+    # Decision 2026-11-24: the holdout is a SEPARATE file generated from the same seed and spec, covering the
+    # final synthetic year. It is sealed in task 9.3 (rehearsal only). The normal load and the S-DEMO daily feed
+    # never read it, so S-DEMO (11 Dec 2026 load) is unaffected.
+    start: 2025-12-19
+    end: 2026-12-18
+    file: data/synthetic/holdout/   # git-ignored; sealed by the 2.5 procedure
+
+units:
+  stored: PKR_per_100kg                   # price_obs.min/max/avg_pkr100kg
+  mann_kg: 40                             # 1 mann = 40 kg; per-40kg value x 2.5 = per-100kg value
+  per_40kg_to_100kg: 2.5
+  arrivals_unit: tonne
+
+mandis:
+  # Coordinates: city centroids from Wikipedia coordinates API (en.wikipedia.org, fetched 2026-11-24, rounded to 3 dp).
+  # They are city centres, not market gates; F2 distances are therefore approximate (road_km comes from the distance cache).
+  # variants = spellings the generator injects (defect: name_variant_rate); task 4.2 must map them back to mandi_id.
+  - {id: LAHORE,      name_en: Lahore,         name_ur: "لاہور",        district: Lahore,         lat: 31.550, lon: 74.344, thin: false, variants: ["Lahor", "Lahore Mandi", "LHR", "Lahaur"]}
+  - {id: OKARA,       name_en: Okara,          name_ur: "اوکاڑہ",       district: Okara,          lat: 30.809, lon: 73.454, thin: false, variants: ["Okarah", "Okara Mandi", "Ukara"]}
+  - {id: SAHIWAL,     name_en: Sahiwal,        name_ur: "ساہیوال",      district: Sahiwal,        lat: 30.661, lon: 73.108, thin: false, variants: ["Sahiwaal", "Sahiwal Mandi", "Montgomery"]}
+  - {id: KASUR,       name_en: Kasur,          name_ur: "قصور",         district: Kasur,          lat: 31.117, lon: 74.450, thin: false, variants: ["Kasoor", "Kasur Mandi", "Qasur"]}
+  - {id: FAISALABAD,  name_en: Faisalabad,      name_ur: "فیصل آباد",    district: Faisalabad,     lat: 31.417, lon: 73.091, thin: false, variants: ["Faislabad", "Faisalabad Mandi", "Lyallpur"]}
+  - {id: MULTAN,      name_en: Multan,         name_ur: "ملتان",        district: Multan,         lat: 30.198, lon: 71.470, thin: false, variants: ["Multaan", "Multan Mandi", "Mooltan"]}
+  - {id: GUJRANWALA,  name_en: Gujranwala,      name_ur: "گوجرانوالہ",   district: Gujranwala,     lat: 32.157, lon: 74.190, thin: false, variants: ["Gujranwalla", "Gujranwala Mandi", "Gujranwaala"]}
+  - {id: SARGODHA,    name_en: Sargodha,       name_ur: "سرگودھا",      district: Sargodha,       lat: 32.084, lon: 72.671, thin: false, variants: ["Sargoda", "Sargodha Mandi", "Sargodah"]}
+  - {id: BAHAWALPUR,  name_en: Bahawalpur,      name_ur: "بہاولپور",     district: Bahawalpur,     lat: 29.396, lon: 71.684, thin: false, variants: ["Bahawalpoor", "Bahawalpur Mandi", "Bahalpur"]}
+  - {id: SHEIKHUPURA, name_en: Sheikhupura,     name_ur: "شیخوپورہ",     district: Sheikhupura,    lat: 31.711, lon: 73.988, thin: false, variants: ["Sheikhupurah", "Sheikhupura Mandi", "Shaikhupura"]}
+  - {id: PAKPATTAN,   name_en: Pakpattan,       name_ur: "پاکپتن",       district: Pakpattan,      lat: 30.344, lon: 73.384, thin: false, variants: ["Pak Pattan", "Pakpatan", "Pakpattan Mandi"]}
+  - {id: VEHARI,      name_en: Vehari,         name_ur: "وہاڑی",        district: Vehari,         lat: 30.042, lon: 72.353, thin: false, variants: ["Vihari", "Vehari Mandi", "Wehari"]}
+  - {id: JHANG,       name_en: Jhang,          name_ur: "جھنگ",         district: Jhang,          lat: 31.269, lon: 72.316, thin: true,  variants: ["Jhung", "Jhang Mandi", "Jang"]}
+  - {id: DGKHAN,      name_en: Dera Ghazi Khan, name_ur: "ڈیرہ غازی خان", district: Dera Ghazi Khan, lat: 30.033, lon: 70.640, thin: true,  variants: ["DG Khan", "D.G. Khan", "Dera Ghazi Khan Mandi"]}
+  - {id: RYKHAN,      name_en: Rahim Yar Khan, name_ur: "رحیم یار خان",  district: Rahim Yar Khan, lat: 28.420, lon: 70.300, thin: true,  variants: ["RYK", "Rahimyar Khan", "Rahim Yar Khan Mandi"]}
+
+crops:
+  # base_pkr100kg = level at 2016-01 before seasonal/shock terms. annual_trend = inflation as compound growth per year.
+  # All parameters ASSUMPTION; the seasonal calendars cite the sources noted. dips are Gaussian in month-of-year
+  # (circular): log price falls by `depth` at `month` (1.0 = 1 Jan, 2.5 = mid-Feb) with half-width `width` months.
+  ONION:
+    name_en: Onion
+    name_ur: "پیاز"
+    base_pkr100kg: 3300
+    annual_trend: 0.09
+    producing_mandi: KASUR                # price is lowest here; offset grows with distance (price_level)
+    dips:
+      - {month: 5.5, depth: 0.22, width: 1.5}     # spring harvest Apr-Jun: ASSUMPTION (no source confirmed onion months)
+    ar1_common:  {phi: 0.97, sigma: 0.010}
+    ar1_mandi:   {phi: 0.80, sigma: 0.010}
+    jumps:       {per_year: 2.0, size_sd: 0.12, half_life_days: 20}
+    arrivals:    {base_tonne: 60, price_elasticity: 1.5, noise_sd: 0.15}
+    calendar_source: "No source confirmed onion harvest months (search 2026-11-24); producing districts per PBS crop notes: Kasur, Gujranwala, Sheikhupura, Vehari, Khanewal. ASSUMPTION."
+  TOMATO:
+    name_en: Tomato
+    name_ur: "ٹماٹر"
+    base_pkr100kg: 5000
+    annual_trend: 0.09
+    producing_mandi: SAHIWAL              # ASSUMPTION
+    dips:
+      - {month: 5.0, depth: 0.28, width: 1.2}     # local Punjab crop starts April (Price Control Dept, Khanewal assessment, 2025)
+      - {month: 11.5, depth: 0.20, width: 1.0}    # autumn crop: ASSUMPTION
+    ar1_common:  {phi: 0.95, sigma: 0.016}        # tomato is the most volatile of the three
+    ar1_mandi:   {phi: 0.75, sigma: 0.014}
+    jumps:       {per_year: 3.0, size_sd: 0.20, half_life_days: 12}
+    arrivals:    {base_tonne: 45, price_elasticity: 1.2, noise_sd: 0.20}
+    calendar_source: "Local production season starts April: Punjab Price Control Dept, Khanewal assessment (cc.gov.pk, 2025). Autumn dip ASSUMPTION."
+  POTATO:
+    name_en: Potato
+    name_ur: "آلو"
+    base_pkr100kg: 3300
+    annual_trend: 0.11
+    producing_mandi: OKARA
+    dips:
+      - {month: 2.5, depth: 0.25, width: 1.2}     # autumn crop harvested Jan-Mar, mainly Okara/Sahiwal (PBS crop calendar; Dawn)
+      - {month: 4.5, depth: 0.08, width: 0.8}     # small spring crop Apr-May, <10% of output (Dawn)
+    ar1_common:  {phi: 0.97, sigma: 0.009}
+    ar1_mandi:   {phi: 0.80, sigma: 0.009}
+    jumps:       {per_year: 1.5, size_sd: 0.10, half_life_days: 25}
+    arrivals:    {base_tonne: 80, price_elasticity: 1.5, noise_sd: 0.12}
+    calendar_source: "75% of the Punjab crop is grown in Kasur, Okara, Depalpur, Sahiwal, Pakpattan; autumn crop harvested Jan-Mar (pbs.gov.pk Table 15; dawn.com/news/1284527; freshplaza.com/article/9802963)."
+  WHEAT:
+    name_en: Wheat
+    name_ur: "گندم"
+    base_pkr100kg: 3250                   # 2016 ~ Rs 1,300 per 40 kg: ASSUMPTION
+    annual_trend: 0.10
+    dips:
+      - {month: 5.0, depth: 0.05, width: 1.0}     # harvest Apr-May; prices are policy-anchored so the swing is small
+    ar1_common:  {phi: 0.90, sigma: 0.020}        # monthly step
+    frequency: monthly
+
+price_model:
+  # log p(crop, mandi, t) = ln(base) + ln(1+trend)*years_since_2016-01-01 - sum(dips(month(t)))
+  #                         + common_ar1(crop, t) + mandi_ar1(crop, mandi, t) + jump_state(crop, t)
+  #                         + mandi_effect(crop, mandi)
+  # mandi_effect = distance_slope * haversine_km(mandi, producing_mandi)/100 + N(0, fixed_sd)  (drawn once per mandi)
+  distance_slope_per_100km: 0.04          # ASSUMPTION: +4% per 100 km away from the producing district
+  mandi_fixed_sd: 0.02
+  daily_range:                            # min/max around the day's average
+    half_width: {low: 0.03, high: 0.10}   # uniform; min = avg*(1-w), max = avg*(1+w)
+  columns: {min: min_pkr100kg, max: max_pkr100kg, avg: avg_pkr100kg}
+  grade: null
+
+defects:
+  # Every rate is applied independently with the seed's defect streams, on the SYN and SYN-NULL variants alike.
+  missing_day_rate: 0.02                  # random missing market days
+  thin_mandi_coverage: {low: 0.40, high: 0.55}   # coverage of the 3 mandis flagged thin: true (< 60% => coverage gate fires)
+  typo_10x_rate: 0.003                    # avg multiplied or divided by 10 (50/50)
+  min_gt_max_rate: 0.002                  # min and max swapped; QC must flag
+  per_40kg_unit_rate: 0.05                # unit_raw = "PKR/40kg", value_raw = per-100kg value / 2.5
+  name_variant_rate: 0.15                 # raw mandi name replaced by one of mandis[].variants
+  qc_expectation: "QC flags 100% of injected typos, swaps and unit rows (task 5.3 DONE condition)."
+
+timing:
+  reported_at: "market_date 18:00 Asia/Karachi"
+  late_publish_rate: 0.05                 # published next day: reported_at = next calendar day 18:00 (tests T1-T5 / L1-L6)
+
+variants:
+  SYN:      {source: SYN, structure: full}
+  SYN-NULL: {source: SYN-NULL, structure: "same volatility, defects and mandi offsets; no dips, no trend, no AR(1) persistence, no jumps beyond the same sigma: log price is a pure random walk", purpose: "F1 must NOT beat naive here (false-skill check)"}
+
+daily_feed:
+  command: "python scripts/make_synthetic.py --day YYYY-MM-DD"
+  contract: "Emits exactly the rows the full run holds for that market day (same bytes), so a daily feed loop equals the bulk load."
+
+coverage_constraints:
+  # Structural only; checked by tests/test_spec.py. Needed because the demo requires 3 crops x >=5 eligible mandis
+  # including Lahore, Okara, Sahiwal (file 10 §4) and the thin-mandi defect would otherwise remove them.
+  must_not_be_thin: [LAHORE, OKARA, SAHIWAL, KASUR]
+  min_non_thin_mandis_per_crop: 5
+  min_non_thin_within_150km_of_okara: 3
+
+plausibility:
+  # Used by the realism check E1 (task 5.3, shown to the supervisor on Day 9). Unit: PKR per mann (40 kg).
+  # Anchor: a published 2025 level. The envelope for year Y is anchor x (1 + annual_trend)^(Y - 2025). ASSUMPTION.
+  # The only sourced figures are Lahore RETAIL per-kg prices (Pakistan Today, 1 Sep 2025, after floods x 40 kg), so they
+  # are an upper-side envelope: wholesale should sit at or below them. No sourced 2016 level was found (UNVERIFIED).
+  unit: PKR_per_mann
+  anchor_year: 2025
+  anchors:
+    ONION:  {low: 2600, high: 4000, source: "Lahore onion A-grade Rs65-70 official, Rs100 sold, per kg x 40", url: "https://profit.pakistantoday.com.pk/2025/09/01/floods-rains-push-vegetable-and-fruit-prices-higher-in-lahore/", tag: ASSUMPTION}
+    POTATO: {low: 3400, high: 6000, source: "Lahore potato A-grade Rs85-90 official, Rs150 sold, per kg x 40", url: "https://profit.pakistantoday.com.pk/2025/09/01/floods-rains-push-vegetable-and-fruit-prices-higher-in-lahore/", tag: ASSUMPTION}
+    TOMATO: {low: 4400, high: 8000, source: "Lahore tomato Rs110-120 rising to Rs180-200 per kg, x 40", url: "https://profit.pakistantoday.com.pk/2025/09/01/floods-rains-push-vegetable-and-fruit-prices-higher-in-lahore/", tag: ASSUMPTION}
+  early_years: {source: UNVERIFIED, note: "Deflated from the 2025 anchor with annual_trend. PBS monthly wholesale tables (pbs.gov.pk, Rs per 40 kg) exist for 2010-11 only; replace with a cited 2016 level if one is found before G2."}
