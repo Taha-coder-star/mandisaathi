@@ -8,3 +8,6 @@ __pycache__/
 build/
 # Benchmark audio: volunteers voices, kept out of git; manifest.csv holds the sha256 of each file.
 data/benchmark/audio/
+
+# Sealed lockbox data (task 2.5); only the hash in DECISIONS.md is committed.
+data/lockbox/
