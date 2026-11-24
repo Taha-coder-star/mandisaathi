@@ -109,4 +109,4 @@ Task 3.1 idempotent ingest (`app/ingest.py`, `app/web.py`, `tests/test_ingest.py
 - **Phone numbers** (`from`, `wa_id`, `new_wa_id`, `recipient_id`, `phone`, at any depth) are replaced by HMAC-SHA256(`PHONE_HASH_KEY`, digits only) before insert. This is file 07 §3's "salted hash", deterministic so rows join. Key only in `.env`, must never change; missing key → 503 (fail closed). The encrypted number for sending is deferred to 5.1. `metadata.display_phone_number` (our business number) and the profile name are kept (90-day retention).
 - **Responses:** bad signature 401; signed but malformed 400; key missing, DB down or DB error 503; otherwise 200. Non-`messages` fields and `value.errors` are logged (field name only, never the body) and acked, not stored.
 - **ASSUMPTION:** statuses carry `recipient_user_id` (falls back to hashed `recipient_id`). Confirm against the dashboard "Username scenario" sample.
-- DONE evidence: `tests/test_ingest.py::test_same_payload_twice_one_event_one_job` (CI run id: to be added after CI).
+- DONE evidence: `tests/test_ingest.py::test_same_payload_twice_one_event_one_job` (PR #11 CI run 45347758172 green: secrets, test, image).
