@@ -1,24 +1,14 @@
 """Task 2.3 DONE check: migrations apply on an empty DB and re-run idempotently.
 
-Each test gets its own throwaway database created through TEST_DATABASE_URL (a server we may create DBs on).
-Never point TEST_DATABASE_URL at production.
+Each test gets its own throwaway database (`db` fixture in conftest.py).
 """
-import os
 import threading
-import uuid
 from pathlib import Path
 
 import psycopg
 import pytest
-from psycopg.conninfo import make_conninfo
 
 from app.migrate import MIGRATIONS, MigrationError, migrate
-
-ADMIN_URL = os.environ.get("TEST_DATABASE_URL")
-if not ADMIN_URL:
-    if os.environ.get("CI"):
-        raise RuntimeError("TEST_DATABASE_URL must be set in CI; migration tests may not skip there")
-    pytest.skip("TEST_DATABASE_URL not set", allow_module_level=True)
 
 TABLES = {
     "crop", "crop_alias", "mandi", "place", "place_alias", "distance",
@@ -26,18 +16,6 @@ TABLES = {
     "forecast", "outlook", "series_coverage", "model_registry",
     "inbound_event", "job", "outbound_message",
 }
-
-
-@pytest.fixture
-def db():
-    name = f"mig_test_{uuid.uuid4().hex[:12]}"
-    with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
-        admin.execute(f'CREATE DATABASE "{name}"')
-    try:
-        yield make_conninfo(ADMIN_URL, dbname=name)
-    finally:
-        with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
-            admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
 
 
 def tables(url):

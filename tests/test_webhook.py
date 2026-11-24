@@ -14,6 +14,7 @@ BODY = b'{"object":"whatsapp_business_account","entry":[]}'
 def client(monkeypatch):
     monkeypatch.setenv("META_APP_SECRET", SECRET)
     monkeypatch.setenv("WA_VERIFY_TOKEN", "test-verify-token")
+    monkeypatch.setenv("PHONE_HASH_KEY", "test-hash-key")
     return TestClient(app)
 
 
