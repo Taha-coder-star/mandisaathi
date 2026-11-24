@@ -1,0 +1,6 @@
+market_date,mandi,crop,grade,min_price,max_price,avg_price,unit,arrivals_qty,arrivals_unit
+2026-11-20,Lahore,Onion,A,1200,1300,1250,per 40 kg,450,bags
+2026-11-20,Lahore,Onion,B,1000,1100,1050,per 40 kg,300,bags
+2026-11-20,okara,Tomato,,,,5000,per 100 kg,,
+2026-11-20,Lahore (Badami Bagh),Potato,,3000,3200,3100,per 100 kg,12,tonne
+2026-11-20,Sahiwal,Potato,,30,32,31,per kg,5,tonne
