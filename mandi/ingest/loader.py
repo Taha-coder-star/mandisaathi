@@ -1,0 +1,161 @@
+"""Load a price file into price_obs (task 3.2; file 03 §3, DECISIONS.md D-014).
+
+  python -m mandi.ingest.loader <file.csv> --source SYN|SYN-NULL      (needs DATABASE_URL)
+
+A reader turns one file format into RawObs rows; everything after it (units, reported_at, upsert) is shared.
+Task 3.3 / FYP-II add another read_<format>(path) -> Iterator[RawObs] and nothing else.
+"""
+import argparse
+import csv
+import hashlib
+import os
+import sys
+from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
+from pathlib import Path
+
+import psycopg
+import yaml
+
+SPEC = Path(__file__).resolve().parents[2] / "data" / "synthetic" / "spec.yaml"
+PKT = timezone(timedelta(hours=5), "PKT")  # Pakistan has no DST, so a fixed offset equals Asia/Karachi
+PUBLISH_TIME = time(18, 0)  # file 03 §3 ASSUMPTION: knowable from 18:00 PKT on the market day (leakage test L2)
+TO_PER_100KG = {"PKR/100kg": Decimal(1), "PKR/40kg": Decimal("2.5")}  # anything else is rejected, never guessed
+PERISHABILITY = {"TOMATO": "HIGH", "ONION": "MED", "POTATO": "MED", "WHEAT": "LOW"}  # ASSUMPTION (D-014); 4.3 owns crops
+
+COLS = ["source", "mandi_id", "crop_id", "market_date", "reported_at", "min_pkr100kg", "max_pkr100kg", "avg_pkr100kg",
+        "unit_raw", "value_raw", "arrivals_qty", "arrivals_unit", "raw_ref", "raw_sha256"]
+KEY = ["source", "mandi_id", "crop_id", "grade", "market_date"]  # price_obs UNIQUE NULLS NOT DISTINCT (001_schema_v1)
+UPSERT = (f"INSERT INTO price_obs ({', '.join(COLS)}) VALUES ({', '.join(f'%({c})s' for c in COLS)})"
+          f" ON CONFLICT ({', '.join(KEY)}) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in COLS if c not in KEY))
+
+
+@dataclass(frozen=True)
+class RawObs:
+    market_date: date
+    crop_id: str
+    mandi_raw: str
+    unit_raw: str
+    min_raw: Decimal | None
+    max_raw: Decimal | None
+    avg_raw: Decimal | None
+    arrivals_qty: Decimal | None
+    arrivals_unit: str | None
+    reported_at: datetime | None  # None: the source gives no publish time
+    raw_ref: str
+
+
+@dataclass
+class LoadResult:
+    upserted: int = 0
+    unmatched: list[tuple[str, str]] = field(default_factory=list)  # (raw_ref, mandi_raw): not loaded; task 4.2 maps them
+    rejected: list[tuple[str, str]] = field(default_factory=list)  # (raw_ref, reason)
+
+
+def _dec(s: str) -> Decimal | None:
+    return Decimal(s) if s else None  # from the CSV text, never via float
+
+
+def read_syn_csv(path: Path) -> Iterator[RawObs]:
+    """Generator CSV (scripts/make_synthetic.py). The truth_* answer-key columns are never read."""
+    with open(path, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            yield RawObs(
+                market_date=date.fromisoformat(r["market_date"]),
+                crop_id=r["crop_id"],
+                mandi_raw=r["mandi_raw"],
+                unit_raw=r["unit_raw"],
+                min_raw=_dec(r["min_raw"]),
+                max_raw=_dec(r["max_raw"]),
+                avg_raw=_dec(r["avg_raw"]),
+                arrivals_qty=_dec(r["arrivals_qty"]),
+                arrivals_unit=r["arrivals_unit"] or None,
+                reported_at=datetime.fromisoformat(r["reported_at"]) if r["reported_at"] else None,
+                raw_ref=f"{path.name}#L{reader.line_num}",
+            )
+
+
+def to_price_row(obs: RawObs, mandi_id: str) -> dict:
+    """Canonical price_obs values (PKR per 100 kg). Raises ValueError for an unknown unit or a row with no price."""
+    factor = TO_PER_100KG.get(obs.unit_raw)
+    if factor is None:
+        raise ValueError(f"unknown unit {obs.unit_raw!r}")
+    value_raw = next((v for v in (obs.avg_raw, obs.max_raw, obs.min_raw) if v is not None), None)
+    if value_raw is None:
+        raise ValueError("no price")
+    lo, hi, avg = (None if v is None else v * factor for v in (obs.min_raw, obs.max_raw, obs.avg_raw))
+    reported_at = obs.reported_at or datetime.combine(obs.market_date, PUBLISH_TIME)
+    if reported_at.tzinfo is None:
+        reported_at = reported_at.replace(tzinfo=PKT)  # a source time without zone is local market time
+    return {
+        "mandi_id": mandi_id, "crop_id": obs.crop_id, "market_date": obs.market_date, "reported_at": reported_at,
+        "min_pkr100kg": lo, "max_pkr100kg": hi, "avg_pkr100kg": avg, "unit_raw": obs.unit_raw, "value_raw": value_raw,
+        "arrivals_qty": obs.arrivals_qty, "arrivals_unit": obs.arrivals_unit, "raw_ref": obs.raw_ref,
+    }
+
+
+def exact_resolver(conn: psycopg.Connection) -> Callable[[str], str | None]:
+    """mandi_id or name_en, case-insensitive. shortcut: exact names only; task 4.2 replaces it with variant matching."""
+    names = {}
+    for mandi_id, name_en in conn.execute("SELECT mandi_id, name_en FROM mandi"):
+        names[mandi_id.lower()] = names[name_en.lower()] = mandi_id
+    return lambda raw: names.get(raw.strip().lower())
+
+
+def seed_reference(conn: psycopg.Connection, spec: dict) -> None:
+    """The spec's mandis and crops; existing rows are left alone. city = name_en, province Punjab, default unit mann."""
+    with conn.transaction(), conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO mandi (mandi_id, name_en, name_ur, city, district, province, lat, lon)"
+            " VALUES (%s, %s, %s, %s, %s, 'Punjab', %s, %s) ON CONFLICT DO NOTHING",
+            [(m["id"], m["name_en"], m["name_ur"], m["name_en"], m["district"], m["lat"], m["lon"]) for m in spec["mandis"]],
+        )
+        cur.executemany(
+            "INSERT INTO crop (crop_id, name_en, name_ur, perishability_class, default_unit)"
+            " VALUES (%s, %s, %s, %s, 'mann') ON CONFLICT DO NOTHING",
+            [(cid, c["name_en"], c["name_ur"], PERISHABILITY[cid]) for cid, c in spec["crops"].items()],
+        )
+
+
+def load(conn: psycopg.Connection, source: str, rows: Iterable[RawObs], raw_sha256: str,
+         resolve: Callable[[str], str | None]) -> LoadResult:
+    """Upsert every resolvable, valid row in one transaction; reloading the same file changes nothing."""
+    res, params = LoadResult(), []
+    for obs in rows:
+        mandi_id = resolve(obs.mandi_raw)
+        if mandi_id is None:
+            res.unmatched.append((obs.raw_ref, obs.mandi_raw))
+            continue
+        try:
+            params.append(to_price_row(obs, mandi_id) | {"source": source, "raw_sha256": raw_sha256})
+        except ValueError as e:
+            res.rejected.append((obs.raw_ref, str(e)))
+    if params:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany(UPSERT, params)
+    res.upserted = len(params)
+    return res
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Load a generator CSV into price_obs (task 3.2).")
+    ap.add_argument("csv", type=Path)
+    ap.add_argument("--source", required=True, choices=["SYN", "SYN-NULL"])
+    a = ap.parse_args(argv)
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        print("loader: DATABASE_URL is not set", file=sys.stderr)
+        return 1
+    spec = yaml.safe_load(SPEC.read_text(encoding="utf-8"))
+    with psycopg.connect(url, autocommit=True) as conn:  # autocommit: each conn.transaction() is a real commit
+        seed_reference(conn, spec)
+        res = load(conn, a.source, read_syn_csv(a.csv), hashlib.sha256(a.csv.read_bytes()).hexdigest(), exact_resolver(conn))
+    print(f"loader: upserted {res.upserted}, unmatched {len(res.unmatched)}, rejected {len(res.rejected)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
