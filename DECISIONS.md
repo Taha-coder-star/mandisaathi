@@ -91,3 +91,10 @@ Task 2.4 synthetic spec `data/synthetic/spec.yaml` (file 03 §9.1, A1). Choices 
 - Moving holidays (Eid, Ashura) are synthetic: 2016 anchor dates drifting −11 days/year, not an official calendar.
 - New dependency: `pyyaml` (the generator reads the spec).
 - Frozen at G2 (task 10.3): spec hash and seed recorded there.
+
+## D-012 · 2026-11-24 · Taha · CONFIRMED
+Task 2.5 lockbox procedure (`docs/lockbox_procedure.md`, `scripts/lockbox.py`, `tests/test_lockbox.py`). Choices where the plan is silent:
+- **Folder:** `data/lockbox/<name>/`, git-ignored; only the hash is committed (as a `- lockbox <name> sha256 <hex>` line in a decision entry written by `lockbox.py seal`).
+- **Hash:** sha256 over sorted relative paths + per-file sha256, so edits, additions, removals and renames all break `verify`. A seal is never replaced.
+- **CI read-guard:** static scan, fails if any `.py` under `app/`, `mandi/` or `scripts/` (except `scripts/lockbox.py`) mentions "lockbox". Not proof against dynamic paths; adequate for a solo repo. Task 9.3 adds its single generator call site to the allowlist.
+- **Witness:** FYP-I rehearsal opening is witnessed by whoever I name in the log; FYP-II by the (co-)supervisor.
