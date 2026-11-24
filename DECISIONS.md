@@ -98,3 +98,15 @@ Task 2.5 lockbox procedure (`docs/lockbox_procedure.md`, `scripts/lockbox.py`, `
 - **Hash:** sha256 over sorted relative paths + per-file sha256, so edits, additions, removals and renames all break `verify`. A seal is never replaced.
 - **CI read-guard:** static scan, fails if any `.py` under `app/`, `mandi/` or `scripts/` (except `scripts/lockbox.py`) mentions "lockbox". Not proof against dynamic paths; adequate for a solo repo. Task 9.3 adds its single generator call site to the allowlist.
 - **Witness:** FYP-I rehearsal opening is witnessed by whoever I name in the log; FYP-II by the (co-)supervisor.
+
+## D-013 · 2026-11-24 · Taha · CONFIRMED
+Task 3.1 idempotent ingest (`app/ingest.py`, `app/web.py`, `tests/test_ingest.py`). Choices where RFC §3/§13 and file 07 §3 do not say:
+- **No migration:** 001 already has `inbound_event.dedup_key UNIQUE` and `job`.
+- **One transaction per webhook POST:** per item, `INSERT inbound_event … ON CONFLICT (dedup_key) DO NOTHING RETURNING` chained into the `job` insert. Duplicate → neither row, still 200. Any DB error → whole POST rolled back → 503, so Meta redelivers.
+- **Dedup key:** message = WAMID; status = `<wamid>:<status>` (RFC §13 "(wamid, status)").
+- **One event + one job per new item** (job kind `turn` for messages, `status` for statuses), job payload `{"event_id": …}`. Per-farmer coalescing comes in 6.2, debounce in 14.1.
+- **`user_key`** = the user ID (`from_user_id` / `recipient_user_id`) if present, else the phone hash. Matching the two for one farmer is deferred to `wa_user` (6.2).
+- **Phone numbers** (`from`, `wa_id`, `new_wa_id`, `recipient_id`, `phone`, at any depth) are replaced by HMAC-SHA256(`PHONE_HASH_KEY`, digits only) before insert. This is file 07 §3's "salted hash", deterministic so rows join. Key only in `.env`, must never change; missing key → 503 (fail closed). The encrypted number for sending is deferred to 5.1. `metadata.display_phone_number` (our business number) and the profile name are kept (90-day retention).
+- **Responses:** bad signature 401; signed but malformed 400; key missing, DB down or DB error 503; otherwise 200. Non-`messages` fields and `value.errors` are logged (field name only, never the body) and acked, not stored.
+- **ASSUMPTION:** statuses carry `recipient_user_id` (falls back to hashed `recipient_id`). Confirm against the dashboard "Username scenario" sample.
+- DONE evidence: `tests/test_ingest.py::test_same_payload_twice_one_event_one_job` (PR #11 CI run 45347758172 green: secrets, test, image).

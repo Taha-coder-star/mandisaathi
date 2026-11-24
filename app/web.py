@@ -1,12 +1,18 @@
-"""Web role: webhook gateway (task 2.2) and health check."""
+"""Web role: webhook gateway (tasks 2.2, 3.1) and health check."""
 import hashlib
 import hmac
+import json
+import logging
 import os
 
 import psycopg
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from starlette.concurrency import run_in_threadpool
 
+from app import ingest
+
+log = logging.getLogger(__name__)
 app = FastAPI(title="MandiSaathi")
 
 
@@ -30,10 +36,26 @@ def signature_ok(body: bytes, header: str | None) -> bool:
 
 @app.post("/webhook")
 async def webhook_receive(request: Request):
-    if not signature_ok(await request.body(), request.headers.get("X-Hub-Signature-256")):
+    body = await request.body()
+    if not signature_ok(body, request.headers.get("X-Hub-Signature-256")):
         return Response(status_code=401)  # RFC §9: invalid → 401, never processed
-    # shortcut: acknowledged but not stored yet; task 3.1 adds inbound_event + job in one transaction
-    return Response(status_code=200)
+    key = os.environ.get("PHONE_HASH_KEY", "")
+    if not key:
+        log.error("webhook: PHONE_HASH_KEY not set; not storing")
+        return Response(status_code=503)  # fail closed: never store unhashed numbers; Meta redelivers
+    try:
+        evs = ingest.events(json.loads(body), key)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        log.warning("webhook: signed but malformed payload")
+        return Response(status_code=400)
+    if evs:
+        try:
+            await run_in_threadpool(ingest.store, os.environ["DATABASE_URL"], evs)
+        except (KeyError, psycopg.Error) as e:
+            # type name only: psycopg messages can carry row data
+            log.error("webhook: store failed (%s); rolled back, Meta redelivers", type(e).__name__)
+            return Response(status_code=503)
+    return Response(status_code=200)  # duplicates land here too (RFC §13)
 
 
 def db_ok() -> bool:
