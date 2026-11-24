@@ -80,3 +80,14 @@ Task 2.3 schema v1 (`app/migrations/001_schema_v1.sql`, runner `app/migrate.py`)
 - **Infra column sets are ASSUMPTION** (RFC §8 only names the tables): `inbound_event` (unique `dedup_key` = WAMID or status key; `user_key` text for BSUID "US.…"; `payload` jsonb, **task 3.1 must strip/hash phone numbers before insert**, file 07 §3), `job` (claim index `(priority, run_at) WHERE status = 'queued'`, lower priority runs first; lease via `locked_until`), `outbound_message` (`UNIQUE (job_id, seq)`).
 - **Migrations run automatically on deploy:** compose service `migrate` (one-shot, `python -m app.migrate`); web/worker/batch wait for `service_completed_successfully`. Runner: one transaction per file, `schema_migrations(version, checksum, applied_at)`, advisory lock, sha256 checksum (CRLF normalised) so an edited applied migration fails loudly.
 - DONE evidence: `tests/test_migrate.py` (empty DB → 17 tables; rerun → history unchanged; rollback; checksum; 3 concurrent migrators apply once) against Postgres 16 locally and in CI.
+
+## D-011 · 2026-11-24 · Taha · REPORTED (review pending: supervisor)
+Task 2.4 synthetic spec `data/synthetic/spec.yaml` (file 03 §9.1, A1). Choices where the plan is silent:
+- **Reviewer:** the supervisor (I work alone; D-010's "second member" is the supervisor). Task 2.4 is not DONE until they have read it; record the date and any change requests below.
+- **Holdout** is a separate file for 2025-12-19 → 2026-12-18 generated from the same seed and spec, sealed in task 9.3. The normal load and the S-DEMO daily feed never read it, so the 11 Dec 2026 demo load is unaffected.
+- **Mandis:** 15 Punjab cities, centroids from the Wikipedia coordinates API (fetched 2026-11-24), not market gates. Thin (<60% coverage): Jhang, Dera Ghazi Khan, Rahim Yar Khan. Lahore, Okara, Sahiwal, Kasur are forced non-thin; a test enforces ≥5 non-thin mandis per crop and ≥3 within 150 km of Okara.
+- **All price parameters are ASSUMPTION** (base level, trend, AR(1), jumps, distance slope). Seasonal dips: potato autumn crop Jan–Mar (PBS crop calendar, Dawn), tomato local season from April (Punjab Price Control Dept). **Onion harvest months have no confirmed source**; the Apr–Jun dip is an assumption.
+- **Plausibility** is anchored on one sourced level: Lahore *retail* per-kg prices, Pakistan Today, 1 Sep 2025 (×40 kg → per mann), used as an upper-side envelope. No sourced 2016 level found (UNVERIFIED): earlier years are deflated with `annual_trend`. E1 (task 5.3) compares against this; replace with a cited 2016 level if one turns up before G2.
+- Moving holidays (Eid, Ashura) are synthetic: 2016 anchor dates drifting −11 days/year, not an official calendar.
+- New dependency: `pyyaml` (the generator reads the spec).
+- Frozen at G2 (task 10.3): spec hash and seed recorded there.
