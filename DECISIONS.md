@@ -81,9 +81,9 @@ Task 2.3 schema v1 (`app/migrations/001_schema_v1.sql`, runner `app/migrate.py`)
 - **Migrations run automatically on deploy:** compose service `migrate` (one-shot, `python -m app.migrate`); web/worker/batch wait for `service_completed_successfully`. Runner: one transaction per file, `schema_migrations(version, checksum, applied_at)`, advisory lock, sha256 checksum (CRLF normalised) so an edited applied migration fails loudly.
 - DONE evidence: `tests/test_migrate.py` (empty DB → 17 tables; rerun → history unchanged; rollback; checksum; 3 concurrent migrators apply once) against Postgres 16 locally and in CI.
 
-## D-011 · 2026-11-24 · Taha · REPORTED (review pending: supervisor)
+## D-011 · 2026-11-24 · Taha · CONFIRMED (supervisor reviewed, no changes requested)
 Task 2.4 synthetic spec `data/synthetic/spec.yaml` (file 03 §9.1, A1). Choices where the plan is silent:
-- **Reviewer:** the supervisor (I work alone; D-010's "second member" is the supervisor). Task 2.4 is not DONE until they have read it; record the date and any change requests below.
+- **Reviewer:** the supervisor (I work alone; D-010's "second member" is the supervisor). **Reviewed 2026-11-24: supervisor said the spec is fine, no change requests** (reported by me, verbal; exact review date not recorded). Task 2.4 DONE.
 - **Holdout** is a separate file for 2025-12-19 → 2026-12-18 generated from the same seed and spec, sealed in task 9.3. The normal load and the S-DEMO daily feed never read it, so the 11 Dec 2026 demo load is unaffected.
 - **Mandis:** 15 Punjab cities, centroids from the Wikipedia coordinates API (fetched 2026-11-24), not market gates. Thin (<60% coverage): Jhang, Dera Ghazi Khan, Rahim Yar Khan. Lahore, Okara, Sahiwal, Kasur are forced non-thin; a test enforces ≥5 non-thin mandis per crop and ≥3 within 150 km of Okara.
 - **All price parameters are ASSUMPTION** (base level, trend, AR(1), jumps, distance slope). Seasonal dips: potato autumn crop Jan–Mar (PBS crop calendar, Dawn), tomato local season from April (Punjab Price Control Dept). **Onion harvest months have no confirmed source**; the Apr–Jun dip is an assumption.
