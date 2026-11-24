@@ -11,3 +11,7 @@ data/benchmark/audio/
 
 # Sealed lockbox data (task 2.5); only the hash in DECISIONS.md is committed.
 data/lockbox/
+
+# Generated synthetic data (task 3.2): rebuilt from spec.yaml + seed; the holdout folder is never committed (spec).
+data/synthetic/*.csv
+data/synthetic/holdout/
