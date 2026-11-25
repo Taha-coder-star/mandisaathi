@@ -4,8 +4,9 @@ Runs inside the web container on the VM (the image has no scripts/, so pipe it i
     sudo docker compose exec -T web python - 923XXXXXXXXX < scripts/m1_replay.py
 
 The number is a team phone. It posts one text "from" that phone, waits for the worker's echo, posts the same body again
-(as Meta's redelivery would), and checks: 1 inbound_event, 1 job, 1 outbound_message. The phone must get exactly one
-"Echo: M1 replay test ..." reply. Exit code 0 = PASS. Needs META_APP_SECRET and DATABASE_URL (the container's .env).
+(as Meta's redelivery would), and checks: 1 inbound_event, 1 job, 1 outbound_message (2 on first contact: consent +
+echo, task 6.2). The phone must get exactly one "Echo: M1 replay test ..." reply.
+Exit code 0 = PASS. Needs META_APP_SECRET and DATABASE_URL (the container's .env).
 """
 import hashlib
 import hmac
@@ -56,7 +57,8 @@ def main(phone: str) -> int:
         time.sleep(5)  # give the worker time to (wrongly) act on a duplicate
         result = counts(conn, wamid)
     print("after replay (events, jobs, outbound, statuses):", result)
-    ok = result[:3] == (1, 1, 1) and result[3][0] in ("sent", "delivered", "read")
+    # 2 outbound rows if this phone had no wa_user yet (consent + reply, task 6.2), else 1
+    ok = result[:2] == (1, 1) and result[2] in (1, 2) and all(st in ("sent", "delivered", "read") for st in result[3])
     print("M1 (b):", "PASS" if ok else "FAIL", "- check the phone got exactly one echo")
     return 0 if ok else 1
 

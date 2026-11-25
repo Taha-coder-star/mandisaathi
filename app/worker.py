@@ -25,7 +25,7 @@ POLL_S = 1.0                    # idle wait between empty claims
 RECONNECT_S = 5.0
 
 # Expired leases count as due. shortcut: looks at 20 due rows per claim, so >20 queued jobs of busy farmers can delay
-# other farmers until one finishes; fine once 6.2 coalesces a farmer's messages into one turn.
+# other farmers until one finishes; 6.2 coalesces a burst into one turn, so the extra jobs finish at once.
 CLAIM_SQL = """
 SELECT id, kind, user_key, payload, attempts FROM job
 WHERE (status = 'queued' AND run_at <= now()) OR (status = 'running' AND locked_until < now())
@@ -44,7 +44,7 @@ class Job(NamedTuple):
 
 
 # kind -> handler(conn, job). A handler raises to fail the attempt (worker retries, then dead-letters). Added in task 5.1;
-# `turn` is the temporary echo bot (task 6.2 replaces it), `status` is the forward-only delivery-receipt updater.
+# `turn` is the conversation orchestrator (task 6.2), `status` is the forward-only delivery-receipt updater.
 HANDLERS = {"turn": handlers.handle_turn, "status": handlers.handle_status}
 
 

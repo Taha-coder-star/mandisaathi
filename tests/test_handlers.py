@@ -1,8 +1,11 @@
-"""Task 5.1 DONE logic: the echo bot replies once and idempotently; status webhooks move outbound forward only (RFC C12, §13).
+"""Turn handler (tasks 5.1 + 6.2) and status handler: replies go out once and idempotently; first contact gets consent;
+a burst is one turn; STOP deletes the farmer; status webhooks move outbound forward only (RFC C3, C12, §13).
 
 Each test gets a throwaway database (`db` in conftest.py) and stubs the gateway, so no WhatsApp call leaves the process.
 The live "echo on all 3 phones; sent → delivered → read" check runs on the VM with the real token (see D-021).
 """
+from datetime import UTC, datetime, timedelta
+
 import psycopg
 import pytest
 from cryptography.fernet import Fernet
@@ -10,7 +13,7 @@ from psycopg.types.json import Jsonb
 
 from app import crypto, gateway, handlers
 from app.migrate import migrate
-from app.worker import Job
+from app.worker import Job, run_one
 
 ENC_KEY = Fernet.generate_key().decode()
 NUMBER = "923001234567"
@@ -40,7 +43,7 @@ class StubGateway:
         self.sends.append((to, body))
         if isinstance(self.result, BaseException):
             raise self.result
-        return self.result
+        return self.result if len(self.sends) == 1 else f"{self.result}.{len(self.sends)}"  # outbound wamid is UNIQUE
 
 
 @pytest.fixture
@@ -51,7 +54,7 @@ def gw(monkeypatch):
 _n = iter(range(1, 10_000))
 
 
-def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F"):
+def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F", consented=True, wa_ts=None):
     """Insert an inbound message event + its turn job; return the Job the worker would hand the handler."""
     wamid_in = f"wamid.IN{next(_n)}"
     message = {"id": wamid_in, "type": mtype, "from": "HASHED"}
@@ -62,9 +65,11 @@ def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F
     payload = {"metadata": {"display_phone_number": "15551914461"}, "message": message}
     if with_enc:
         payload["from_enc"] = crypto.encrypt(ENC_KEY, NUMBER)
+    if consented:  # most tests are about the reply, not the consent gate
+        conn.execute("INSERT INTO wa_user (user_key, consent_at) VALUES (%s, now()) ON CONFLICT DO NOTHING", (user,))
     eid = conn.execute(
-        "INSERT INTO inbound_event (dedup_key, kind, user_key, payload) VALUES (%s,'message',%s,%s) RETURNING id",
-        (wamid_in, user, Jsonb(payload)),
+        "INSERT INTO inbound_event (dedup_key, kind, user_key, wa_ts, payload) VALUES (%s,'message',%s,%s,%s) RETURNING id",
+        (wamid_in, user, wa_ts, Jsonb(payload)),
     ).fetchone()[0]
     jid = conn.execute(
         "INSERT INTO job (kind, user_key, payload) VALUES ('turn',%s,%s) RETURNING id", (user, Jsonb({"event_id": eid}))
@@ -72,7 +77,7 @@ def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F
     return Job(jid, "turn", user, {"event_id": eid}, 1)
 
 
-def outbound(conn, job_id, seq=0):
+def outbound(conn, job_id, seq=handlers.REPLY_SEQ):
     """(status, wamid, body text, last_error) or None."""
     return conn.execute(
         "SELECT status, wamid, body->>'text', last_error FROM outbound_message WHERE job_id=%s AND seq=%s", (job_id, seq)
@@ -167,13 +172,88 @@ def test_mark_read_failure_does_not_stop_the_reply(conn, monkeypatch):
     assert gw.sends == [(NUMBER, "Echo: aloo ka rate")] and outbound(conn, job.id)[0] == "sent"
 
 
+# --- orchestrator skeleton (task 6.2 DONE: consent, burst = 1 turn, STOP deletes) ---------------------------------------
+
+FARMER_TABLES = ("wa_user", "query_state", "inbound_event", "outbound_message", "job")
+
+
+def count_for(conn, user):
+    """Rows still keyed to this farmer, per table."""
+    return {t: conn.execute(f"SELECT count(*) FROM {t} WHERE user_key = %s", (user,)).fetchone()[0] for t in FARMER_TABLES}
+
+
+def test_first_contact_gets_consent_then_reply_and_only_once(conn, gw):
+    handlers.handle_turn(conn, seed_turn(conn, user="US.NEW", consented=False))
+    assert gw.sends == [(NUMBER, handlers.CONSENT_TEXT), (NUMBER, "Echo: aloo ka rate")]
+    assert conn.execute("SELECT consent_at IS NOT NULL FROM wa_user WHERE user_key = 'US.NEW'").fetchone() == (True,)
+    handlers.handle_turn(conn, seed_turn(conn, "pyaz", user="US.NEW", consented=False))
+    assert gw.sends[2:] == [(NUMBER, "Echo: pyaz")]  # consent shown once
+
+
+def test_burst_of_three_pending_messages_is_one_turn(conn, gw):
+    t0 = datetime(2026, 11, 30, 9, tzinfo=UTC)
+    # stored out of WhatsApp order (webhooks can arrive late): the turn must read them by wa_ts
+    jobs = [seed_turn(conn, text, wa_ts=t0 + timedelta(seconds=s)) for text, s in (("Lahore", 2), ("pyaz", 0), ("50 mann", 5))]
+    while run_one(conn):
+        pass
+    assert gw.sends == [(NUMBER, "Echo: pyaz\nEcho: Lahore\nEcho: 50 mann")]
+    assert conn.execute("SELECT DISTINCT status FROM job").fetchall() == [("done",)]
+    assert conn.execute("SELECT DISTINCT turn_job_id FROM inbound_event").fetchall() == [(jobs[0].id,)]
+    assert conn.execute("SELECT version FROM query_state WHERE user_key = 'US.F'").fetchone() == (1,)
+    assert conn.execute("SELECT last_inbound_at FROM wa_user WHERE user_key = 'US.F'").fetchone() == (t0 + timedelta(seconds=5),)
+
+
+def test_stop_confirms_and_deletes_the_farmer(conn, gw):
+    handlers.handle_turn(conn, seed_turn(conn, user="US.GONE", consented=False))  # consent + reply, state saved
+    insert_outbound(conn, wamid="wamid.OTHER", user="US.OTHER")  # another farmer's data must survive
+    job = seed_turn(conn, "STOP!", user="US.GONE", consented=False)
+    handlers.handle_turn(conn, job)
+    assert gw.sends[-1] == (NUMBER, handlers.STOP_TEXT)
+    assert count_for(conn, "US.GONE") == dict.fromkeys(FARMER_TABLES, 0)
+    assert conn.execute("SELECT message_count FROM stop_tally").fetchall() == [(2,)]  # anonymous count only
+    assert conn.execute("SELECT user_key, payload FROM job WHERE id = %s", (job.id,)).fetchone() == (None, {})
+    assert count_for(conn, "US.OTHER")["outbound_message"] == 1
+    handlers.handle_turn(conn, job._replace(user_key=None))  # re-claim after STOP: nothing to do
+    assert len(gw.sends) == 3
+
+
+def test_stop_as_first_message_skips_consent(conn, gw):
+    handlers.handle_turn(conn, seed_turn(conn, "band karo", user="US.S", consented=False))
+    assert gw.sends == [(NUMBER, handlers.STOP_TEXT)]
+    assert count_for(conn, "US.S")["wa_user"] == 0
+
+
+@pytest.mark.parametrize("text,stop", [("STOP", True), (" Band  karo ", True), ("بند کرو", True), ("stop!!", True),
+                                       ("stop alert", False), ("band", False), ("pyaz ka rate", False)])
+def test_stop_words_whole_message_only(text, stop):
+    assert handlers._is_stop({"type": "text", "text": {"body": text}}) is stop
+
+
+def test_retry_after_consent_does_not_resend_consent(conn, monkeypatch):
+    sent = []
+
+    def send(to, body):
+        sent.append(body)
+        if len(sent) == 2:  # consent accepted, then the reply hits a 503
+            raise gateway.SendRetryable("HTTP 503")
+        return f"wamid.{len(sent)}"
+    monkeypatch.setattr(gateway, "mark_read", lambda mid, typing=True: None)
+    monkeypatch.setattr(gateway, "send_text", send)
+    job = seed_turn(conn, user="US.R", consented=False)
+    with pytest.raises(gateway.SendRetryable):
+        handlers.handle_turn(conn, job)
+    handlers.handle_turn(conn, job)  # the worker's retry
+    assert sent == [handlers.CONSENT_TEXT, "Echo: aloo ka rate", "Echo: aloo ka rate"]
+    assert conn.execute("SELECT version FROM query_state WHERE user_key = 'US.R'").fetchone() == (1,)
+
+
 # --- status handler (forward-only) ------------------------------------------------------------------------------------
 
-def insert_outbound(conn, wamid="wamid.OUT", status="sent"):
-    jid = conn.execute("INSERT INTO job (kind, user_key) VALUES ('turn','US.F') RETURNING id").fetchone()[0]
+def insert_outbound(conn, wamid="wamid.OUT", status="sent", user="US.F"):
+    jid = conn.execute("INSERT INTO job (kind, user_key) VALUES ('turn',%s) RETURNING id", (user,)).fetchone()[0]
     conn.execute(
-        "INSERT INTO outbound_message (job_id, seq, user_key, wamid, body, status) VALUES (%s,0,'US.F',%s,%s,%s)",
-        (jid, wamid, Jsonb({"type": "text", "text": "hi"}), status),
+        "INSERT INTO outbound_message (job_id, seq, user_key, wamid, body, status) VALUES (%s,0,%s,%s,%s,%s)",
+        (jid, user, wamid, Jsonb({"type": "text", "text": "hi"}), status),
     )
     return wamid
 
