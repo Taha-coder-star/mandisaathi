@@ -27,8 +27,7 @@ data/benchmark/
 One JSON object per line, UTF-8, Urdu script as-is (no escaping needed).
 
 ## 2. Label schema
-Canonical values (until the gazetteer in 6.1 exists, places use upper-snake canonical names; 6.1 maps them to
-mandi IDs and this file's examples are updated, not the items' meaning):
+Canonical values (`place.canonical` = place id in `mandi/gazetteer.yaml` (D-019)):
 
 | Field | Allowed values |
 |---|---|
@@ -60,7 +59,7 @@ output; inventing it is a miss.
      "horizon":  null},
    "tool": {"name": "best_mandis", "args": {"crop": "ONION", "origin": "OKARA", "quantity_kg": 2000}},
    "outcome": "ANSWER", "clarify_slot": null},
- "tags": ["quantity", "place_alias"], "notes": ""}
+ "tags": ["quantity"], "notes": ""}
 ```
 `tags` drive the coverage counts in §3.1: `quantity`, `number_word`, `place_alias`, `place_urdu`,
 `crop_punjabi`, `horizon`, `spelling_variant`.
@@ -104,6 +103,34 @@ requests.
 `op`: `set`, `add` ("Lahore ka bhi"), `ref` (list position, `"position": 2`), `correct`. For `REFERENCE` items the
 context's last turn lists the mandis in order, so position N is checkable. Commands use the same shape with
 `intent = ALERT|STOP` and `alert_action`.
+
+### 2.5 Labelling rules (4.4)
+Binding for 6.4, 7.1 and 15.3 (D-020); change them before the 9.4 freeze if wrong. Checked by
+`tests/test_benchmark_texts.py`.
+
+| `intent` | `tool.name` | `tool.args` |
+|---|---|---|
+| `PRICE_NOW` | `price_now` | `crop`, `mandi` |
+| `FORECAST` | `get_forecast` | `crop`, `mandi`, `h` |
+| `WHERE_TO_SELL` | `best_mandis` | `crop`, `origin`, `quantity_kg` |
+| `OUTLOOK` | `get_outlook` | `crop`, `month` (+ `mandi` if a place is given) |
+| `ALERT` | `set_alert` | `crop`, `mandi`, `direction` (`ABOVE`/`BELOW`), `threshold` (PKR per mann) |
+| `STOP` | `stop` | none (`{}`) |
+| `HELP`, `OTHER` | no tool (`null`) | |
+
+- `tool` is `null` whenever `outcome` ≠ `ANSWER`. Each arg equals its slot (`crop.id`, `place.canonical`,
+  `quantity.value_kg`, `horizon.h` / `horizon.month`). `alert_action` is present only when `intent = ALERT`.
+- Two crops in one message (T-AMB-06): `outcome = ANSWER`; `slots.crop` and `tool` are lists of two, in message order.
+- `quantity.value_kg` = value × 40 (`MANN`), × 1 (`KG`), × 1000 (`TON`), `null` for `BORI`/`NONE`. Quantity is
+  labelled whenever the message has one, even if the tool does not use it.
+- `place.role` = `ORIGIN` for `WHERE_TO_SELL`, else `MANDI`. `place.canonical` is `null` when `status = UNKNOWN`.
+- Horizon: "kal"/"کل" with a future verb → `DAYS` h = 1; bare "kal ka rate" → `AMBIGUOUS` (intent `PRICE_NOW`);
+  "agle hafte"/"next week" → `DAYS` h = 7; a month name → the next such month after 2026-12-11.
+- Several slots missing: `clarify_slot` = the first missing in the order crop, place, quantity_unit, horizon.
+- Uncovered crops (kapas, rice) → `crop.id = OUT_OF_COVERAGE`. WHEAT keeps its id and appears only under `OUTLOOK`.
+- Tags `quantity`, `horizon`, `number_word` (quantity without digits), `place_urdu` (place raw in Urdu script),
+  `place_alias` (resolved place raw that is not its `name_en`/`name_ur`) and `crop_punjabi` (a PUNJABI crop alias)
+  follow from the slots; `spelling_variant` is set by hand.
 
 ## 3. Item matrix
 
