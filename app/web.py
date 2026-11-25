@@ -7,13 +7,19 @@ import os
 
 import psycopg
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.concurrency import run_in_threadpool
 
 from app import ingest
+from app.privacy import PRIVACY_HTML
 
 log = logging.getLogger(__name__)
 app = FastAPI(title="MandiSaathi")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    return PRIVACY_HTML
 
 
 @app.get("/webhook")
