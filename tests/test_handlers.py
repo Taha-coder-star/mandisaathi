@@ -57,6 +57,8 @@ def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F
     message = {"id": wamid_in, "type": mtype, "from": "HASHED"}
     if mtype == "text":
         message["text"] = {"body": text}
+    if mtype == "audio":
+        message["audio"] = {"id": "MEDIA1", "mime_type": "audio/ogg; codecs=opus", "voice": True}
     payload = {"metadata": {"display_phone_number": "15551914461"}, "message": message}
     if with_enc:
         payload["from_enc"] = crypto.encrypt(ENC_KEY, NUMBER)
@@ -91,6 +93,25 @@ def test_non_text_message_echoes_a_note(conn, gw):
     job = seed_turn(conn, mtype="image")
     handlers.handle_turn(conn, job)
     assert gw.sends == [(NUMBER, "Echo: received a image message")]
+
+
+def test_voice_note_is_downloaded_reported_and_deleted(conn, gw, monkeypatch, tmp_path):
+    f = tmp_path / "note.ogg"
+    f.write_bytes(b"x" * 42)
+    monkeypatch.setattr(gateway, "download_media", lambda mid: str(f) if mid == "MEDIA1" else None)
+    handlers.handle_turn(conn, seed_turn(conn, mtype="audio"))
+    assert gw.sends == [(NUMBER, "Echo: voice note received (42 bytes)")]
+    assert not f.exists()  # audio is never kept (OPS §3)
+
+
+def test_voice_note_retryable_download_reraises_before_any_send(conn, gw, monkeypatch):
+    def boom(mid):
+        raise gateway.SendRetryable("HTTP 503")
+    monkeypatch.setattr(gateway, "download_media", boom)
+    job = seed_turn(conn, mtype="audio")
+    with pytest.raises(gateway.SendRetryable):
+        handlers.handle_turn(conn, job)
+    assert gw.sends == [] and outbound(conn, job.id) is None  # nothing recorded, so the retry starts clean
 
 
 def test_rerun_does_not_resend(conn, gw):
