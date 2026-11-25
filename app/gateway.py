@@ -12,9 +12,12 @@ stdlib urllib only (no new runtime dependency, D-021). Config is read from the e
 three roles share one import. Message/analysis numbers never appear in exceptions or logs: only the HTTP status and
 Meta's numeric error code are surfaced (a Meta error message can echo the recipient number).
 """
+import hashlib
 import json
+import mimetypes
 import os
 import socket
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -32,7 +35,7 @@ MAX_BODY = 1024
 
 
 class SendError(Exception):
-    """Base for all send failures."""
+    """Base for all Cloud API call failures (sends and media downloads)."""
 
 
 class SendRetryable(SendError):
@@ -70,6 +73,13 @@ def _raw_post(url: str, data: bytes, headers: dict, timeout: float) -> tuple[int
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (fixed https host)
         return resp.status, resp.read()
+
+
+def _raw_get(url: str, headers: dict, timeout: float, limit: int) -> bytes:
+    """The one real GET (monkeypatched in tests). Reads at most limit+1 bytes so an oversized body is detectable."""
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (Graph host or the URL Meta gave us)
+        return resp.read(limit + 1)
 
 
 def _meta_code(body: bytes) -> str:
@@ -185,3 +195,67 @@ def mark_read(message_id: str, typing: bool = True) -> dict:
     if typing:
         payload["typing_indicator"] = {"type": "text"}
     return _post(payload)
+
+
+# --- media download (task 5.2, RFC §4 step 2) -------------------------------------------------------------------------
+
+MAX_MEDIA_BYTES = 16 * 1024 * 1024  # Cloud API audio limit is 16 MB; anything bigger is not a WhatsApp voice note
+
+
+class _Expired(Exception):
+    """The short-lived download URL no longer serves the file (any 4xx or a sha256 mismatch)."""
+
+
+def _get(url: str, limit: int) -> bytes:
+    """GET with the bearer token. GETs are idempotent, so a timeout/reset is retryable (unlike a send)."""
+    try:
+        body = _raw_get(url, _headers(), TIMEOUT_S, limit)
+    except urllib.error.HTTPError as e:
+        if e.code == 429 or e.code >= 500:
+            raise SendRetryable(f"HTTP {e.code}") from e
+        raise SendPermanent(f"HTTP {e.code} ({_meta_code(e.read())})") from e
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise SendRetryable(f"network error: {type(getattr(e, 'reason', e)).__name__}") from e
+    if len(body) > limit:
+        raise SendPermanent(f"body larger than {limit} bytes")
+    return body
+
+
+def media_info(media_id: str) -> dict:
+    """Ask Graph for a fresh download URL: {url, mime_type, sha256, file_size, id}. The URL is valid ~5 min (file 06)."""
+    try:
+        return json.loads(_get(f"{GRAPH_HOST}/{_version()}/{media_id}", 64 * 1024))
+    except ValueError as e:
+        raise SendRetryable("media info: unparsable body") from e
+
+
+def _fetch(info: dict) -> bytes:
+    try:
+        data = _get(info["url"], MAX_MEDIA_BYTES)
+    except SendPermanent as e:  # 401/403/404 etc. from the CDN: treat as an expired URL, the caller re-queries once
+        raise _Expired(str(e)) from e
+    if info.get("sha256") and hashlib.sha256(data).hexdigest() != info["sha256"]:
+        raise _Expired("sha256 mismatch")  # e.g. an HTML error page served with 200
+    return data
+
+
+def download_media(media_id: str, info: dict | None = None) -> str:
+    """Download a media file into a new temp file and return its path; the CALLER deletes it (audio is never kept, OPS §3).
+
+    `info` is an earlier media_info() result; if its URL has expired, the media ID is re-queried once for a fresh URL
+    (RFC §4: "5-min URL, re-query on expiry"). Passing a stale `info` is how the forced-expiry test exercises that path.
+    """
+    info = info or media_info(media_id)
+    try:
+        data = _fetch(info)
+    except _Expired:
+        info = media_info(media_id)
+        try:
+            data = _fetch(info)
+        except _Expired as e:
+            raise SendPermanent(f"media download failed after re-query: {e}") from e
+    mime = (info.get("mime_type") or "").split(";")[0].strip()
+    fd, path = tempfile.mkstemp(prefix="wa-media-", suffix=mimetypes.guess_extension(mime) or "")
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    return path

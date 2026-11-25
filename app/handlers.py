@@ -31,9 +31,26 @@ def _load_payload(conn, event_id: int) -> dict | None:
     return row[0] if row else None
 
 
+def _audio_echo(msg: dict) -> str:
+    """Download the voice note (task 5.2), report it, delete it: no STT until 6.x and audio is never kept (OPS §3).
+
+    SendRetryable propagates so the worker retries the turn; a later attempt re-queries the media ID for a fresh URL.
+    """
+    try:
+        path = gateway.download_media(msg["audio"]["id"])
+    except gateway.SendPermanent as e:
+        return f"Echo: voice note could not be downloaded ({e})"
+    try:
+        return f"Echo: voice note received ({os.path.getsize(path)} bytes)"
+    finally:
+        os.remove(path)
+
+
 def _echo_body(msg: dict) -> str:
     if msg.get("type") == "text":
         return "Echo: " + msg["text"]["body"]
+    if msg.get("type") == "audio":
+        return _audio_echo(msg)
     return f"Echo: received a {msg.get('type', '?')} message"  # non-text inbound: a short note (echo bot only, task 6.x parses)
 
 

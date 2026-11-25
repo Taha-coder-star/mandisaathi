@@ -2,7 +2,10 @@
 
 No network: payload-shape tests stub `_post`; error-mapping tests stub the one real call `_raw_post`.
 """
+import hashlib
 import io
+import json
+import os
 import socket
 import urllib.error
 
@@ -176,3 +179,89 @@ def test_missing_config_is_permanent(monkeypatch):
     monkeypatch.setenv("WA_TOKEN", "tok")
     with pytest.raises(gateway.SendPermanent):
         gateway.send_text(TO, "hi")
+
+
+# --- media download (task 5.2): fresh URL per media ID, re-query once when the 5-min URL has expired -------------------
+
+AUDIO = b"OggS fake voice note"
+AUDIO_SHA = hashlib.sha256(AUDIO).hexdigest()
+
+
+@pytest.fixture
+def media(monkeypatch):
+    """Fake Graph + CDN. Graph hands out url-1, url-2, ...; `dead` URLs answer like an expired link. Returns the state."""
+    monkeypatch.setenv("WA_TOKEN", "tok")
+    st = {"queries": 0, "dead": set(), "cdn": None, "graph": None}
+
+    def raw(url, headers, timeout, limit):
+        assert headers["Authorization"] == "Bearer tok"
+        if url.endswith("/MEDIA1"):  # Graph media lookup
+            if st["graph"]:
+                raise st["graph"]
+            st["queries"] += 1
+            return json.dumps({"id": "MEDIA1", "url": f"https://cdn.test/url-{st['queries']}",
+                               "mime_type": "audio/ogg; codecs=opus", "sha256": AUDIO_SHA, "file_size": len(AUDIO)}).encode()
+        if url in st["dead"]:
+            raise http_error(404, b"")
+        return st["cdn"](url) if st["cdn"] else AUDIO[: limit + 1]
+
+    monkeypatch.setattr(gateway, "_raw_get", raw)
+    return st
+
+
+def _raise(err):
+    raise err
+
+
+def _read_and_delete(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    os.remove(path)
+    return data
+
+
+def test_download_media_writes_temp_file(media):
+    path = gateway.download_media("MEDIA1")
+    assert os.path.basename(path).startswith("wa-media-")
+    assert _read_and_delete(path) == AUDIO and media["queries"] == 1
+
+
+def test_forced_expiry_requeries_and_succeeds(media):
+    """DONE test for 5.2: a stale (expired) URL makes the download re-query the media ID once, then succeed."""
+    stale = gateway.media_info("MEDIA1")      # url-1, as if fetched >5 min ago
+    media["dead"].add(stale["url"])            # ... and now expired
+    path = gateway.download_media("MEDIA1", stale)
+    assert media["queries"] == 2               # re-queried exactly once, got url-2
+    assert _read_and_delete(path) == AUDIO
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_auth_style_expiry_also_requeries(media, code):
+    media["cdn"] = lambda url: _raise(http_error(code, b"")) if url.endswith("url-1") else AUDIO
+    assert _read_and_delete(gateway.download_media("MEDIA1")) == AUDIO and media["queries"] == 2
+
+
+def test_sha_mismatch_requeries_then_fails_permanent(media):
+    media["cdn"] = lambda url: b"<html>error page</html>"
+    with pytest.raises(gateway.SendPermanent, match="after re-query"):
+        gateway.download_media("MEDIA1")
+    assert media["queries"] == 2               # one re-query, no loop
+
+
+def test_cdn_5xx_is_retryable_without_requery(media):
+    media["cdn"] = lambda url: _raise(http_error(503, b""))
+    with pytest.raises(gateway.SendRetryable):
+        gateway.download_media("MEDIA1")
+    assert media["queries"] == 1
+
+
+def test_bad_media_id_is_permanent(media):
+    media["graph"] = http_error(400)
+    with pytest.raises(gateway.SendPermanent):
+        gateway.download_media("MEDIA1")
+
+
+def test_oversized_media_is_refused(media, monkeypatch):
+    monkeypatch.setattr(gateway, "MAX_MEDIA_BYTES", 4)
+    with pytest.raises(gateway.SendPermanent):
+        gateway.download_media("MEDIA1")
