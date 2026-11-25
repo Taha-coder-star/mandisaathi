@@ -256,3 +256,18 @@ Task 5.4 input normalisers (`mandi/normalise.py`, `tests/test_normalise.py`), fi
   (4) Words-only quantity: the number is the longest phrase that parses right before the unit, so "pyaz ka dedh sau mann" gives 150 and not `None`.
   - **Caveat for 9.1:** `NUMBER_WORDS` holds common words ("do" = give, "so", "ek"), so the validator must match number *phrases* next to a unit/Rs or digits, not single tokens, or it will reject normal Roman Urdu replies.
 - DONE evidence: `tests/test_normalise.py` — **146 parametrized cases pass after the review fixes** (121 before; DONE needs ≥ 80), ruff clean, locally under Python 3.13 venv (CI runs 3.12). No DB needed. Reviewed and fixed (see above); PR #26 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45650897673 (secrets, test, image green); merged 3b5f49c, main CI run 45651328726 green.
+
+## D-026 · 2026-11-25 · Taha · PROPOSED (CONFIRMED once the live replay on the VM passes)
+Task 5.5 M1 smoke test, gate M1 (file 11 §9: "(a) a text from a team phone gets a worker reply; (b) a webhook replay creates no duplicate event or outbound message; (c) a voice note's audio is downloaded; (d) synthetic rows for 3 crops load with passing unit tests; (e) both templates submitted"). The plan gives no procedure; choices:
+- **One new check, the rest reused.** (a), (c), (d), (e) were already met by their own tasks; only (b) had no end-to-end proof (3.1 tested event/job dedup, 5.1 tested no-resend on re-claim, nothing joined them).
+- **(b) automated:** `tests/test_ingest.py::test_m1_replay_one_event_one_reply` posts a signed message, runs the worker (`run_one`, stub gateway), posts the same body again, runs the worker again → 1 inbound_event, 1 job `done`, 1 outbound_message `sent`, exactly 1 send to the phone.
+- **(b) live:** `scripts/m1_replay.py <team phone>` piped into the web container (`sudo docker compose exec -T web python - 92… < scripts/m1_replay.py`; the image has no `scripts/`, so no deploy or Dockerfile change needed). It signs a text "from" the team phone with the real app secret, waits for the echo, replays it, and checks 1/1/1 in the DB; the phone must show exactly one "Echo: M1 replay test …". The `mark_read` on the made-up WAMID fails at Meta and is logged (best-effort by design, D-021). Local dry run (no worker) gave 1 event / 1 job after both posts.
+- **Gate checklist:**
+  | Item | Evidence |
+  |---|---|
+  | (a) text → worker reply | 5.1 live echo on 2 team phones (D-021/D-022); repeated by the live replay above |
+  | (b) replay → no duplicate event/outbound | test above (CI) + live replay: TBD |
+  | (c) voice note downloaded | 5.2 live voice-note echo on the VM (D-023) |
+  | (d) synthetic rows, 3 crops, tests pass | 3.2/3.3 loader tests in CI (`tests/test_loader.py`, `tests/test_make_synthetic.py`, `tests/test_loader_contract.py`); ONION/TOMATO/POTATO |
+  | (e) both templates submitted | price_alert + daily_rates, en + ur, all APPROVED (D-005) |
+- DONE evidence: PR #27 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45653119521 (secrets, test, image green); merged a9d9103, main CI run 45653353861 green. Live replay: TBD.
