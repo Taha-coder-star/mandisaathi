@@ -9,9 +9,10 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from app import crypto, ingest
+from app import crypto, gateway, ingest
 from app.migrate import migrate
 from app.web import app
+from app.worker import run_one
 
 SECRET = "test-app-secret"
 KEY = "test-hash-key"
@@ -90,6 +91,25 @@ def test_same_payload_twice_one_event_one_job(client, db):
     assert jobs[0][0] == "turn"
     assert int(jobs[0][2]) == events[0][0]
     assert jobs[0][1] == events[0][3] == "US.111"
+
+
+def test_m1_replay_one_event_one_reply(client, db, monkeypatch):
+    """Task 5.5, M1 (b): a replayed webhook creates no duplicate event or outbound message, end to end (file 11 §9)."""
+    sends = []
+    monkeypatch.setattr(gateway, "mark_read", lambda mid, typing=True: None)
+    monkeypatch.setattr(gateway, "send_text", lambda to, body: sends.append((to, body)) or f"wamid.OUT{len(sends)}")
+    payload = messages(msg("wamid.M1"))
+    with psycopg.connect(db, autocommit=True) as conn:
+        assert post(client, payload).status_code == 200
+        while run_one(conn):
+            pass
+        assert post(client, payload).status_code == 200  # Meta redelivers after the reply went out
+        while run_one(conn):
+            pass
+        assert conn.execute("SELECT count(*) FROM inbound_event").fetchone()[0] == 1
+        assert conn.execute("SELECT status FROM job").fetchall() == [("done",)]
+        assert conn.execute("SELECT status, wamid FROM outbound_message").fetchall() == [("sent", "wamid.OUT1")]
+    assert sends == [(PHONE, "Echo: aloo ka rate")]
 
 
 def test_multi_message_payload(client, db):
