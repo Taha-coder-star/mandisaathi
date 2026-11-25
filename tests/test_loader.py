@@ -10,7 +10,8 @@ import pytest
 import yaml
 
 from app.migrate import migrate
-from mandi.ingest.loader import PKT, RawObs, load, name_resolver, read_syn_csv, seed_reference, to_price_row
+from mandi.gazetteer import load_gazetteer
+from mandi.ingest.loader import PKT, RawObs, load, name_resolver, read_syn_csv, to_price_row
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = yaml.safe_load((ROOT / "data/synthetic/spec.yaml").read_text(encoding="utf-8"))
@@ -69,7 +70,7 @@ def test_reader_keeps_raw_text_and_line_refs(tmp_path):
 
 def run(url, path, source="SYN"):
     with psycopg.connect(url, autocommit=True) as c:
-        seed_reference(c, SPEC)
+        load_gazetteer(c)
         return load(c, source, read_syn_csv(path), "h" * 64, name_resolver(c))
 
 

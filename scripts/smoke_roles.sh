@@ -7,6 +7,9 @@ trap 'docker rm -f smoke-web smoke-worker >/dev/null 2>&1 || true' EXIT
 echo "== batch"
 docker run --rm "$IMG" python -m mandi.batch
 
+echo "== gazetteer in image"
+docker run --rm "$IMG" python -c "from mandi.gazetteer import read, rows; rows(read())"
+
 echo "== web"
 docker run -d --name smoke-web -p 8000:8000 "$IMG" >/dev/null
 # No Postgres here, so /health answers 503 (db down); any 200/503 proves the web role is serving.

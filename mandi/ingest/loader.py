@@ -23,15 +23,14 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 import psycopg
-import yaml
 
-SPEC = Path(__file__).resolve().parents[2] / "data" / "synthetic" / "spec.yaml"
+from mandi.gazetteer import load_gazetteer
+
 PKT = timezone(timedelta(hours=5), "PKT")  # Pakistan has no DST, so a fixed offset equals Asia/Karachi
 PUBLISH_TIME = time(18, 0)  # file 03 §3 ASSUMPTION: knowable from 18:00 PKT on the market day (leakage test L2)
 # anything else is rejected, never guessed; "per 40 kg"/"per 100 kg" are the request's wording (ASSUMPTION, D-015)
 TO_PER_100KG = {"PKR/100kg": Decimal(1), "PKR/40kg": Decimal("2.5"), "per 100 kg": Decimal(1), "per 40 kg": Decimal("2.5")}
-PERISHABILITY = {"TOMATO": "HIGH", "ONION": "MED", "POTATO": "MED", "WHEAT": "LOW"}  # ASSUMPTION (D-014); 4.3 owns crops
-# old/short names no spelling rule can reach (D-018). shortcut: hard-coded until 4.3's gazetteer owns aliases
+# old/short names no spelling rule can reach (D-018). Ingest keeps its own reviewed aliases; the gazetteer serves chat (D-019)
 MANDI_ALIASES: dict[str, tuple[str, ...]] = {"FAISALABAD": ("Lyallpur",), "SAHIWAL": ("Montgomery",), "RYKHAN": ("RYK",)}
 FUZZY_MIN, FUZZY_MARGIN = 0.85, 0.15  # file 03 §4.3: one candidate >= 0.85 and >= 0.15 ahead of the next
 
@@ -179,21 +178,6 @@ def name_resolver(conn: psycopg.Connection) -> Callable[[str], str | None]:
     return make_matcher(conn.execute("SELECT mandi_id, name_en FROM mandi").fetchall())
 
 
-def seed_reference(conn: psycopg.Connection, spec: dict) -> None:
-    """The spec's mandis and crops; existing rows are left alone. city = name_en, province Punjab, default unit mann."""
-    with conn.transaction(), conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO mandi (mandi_id, name_en, name_ur, city, district, province, lat, lon)"
-            " VALUES (%s, %s, %s, %s, %s, 'Punjab', %s, %s) ON CONFLICT DO NOTHING",
-            [(m["id"], m["name_en"], m["name_ur"], m["name_en"], m["district"], m["lat"], m["lon"]) for m in spec["mandis"]],
-        )
-        cur.executemany(
-            "INSERT INTO crop (crop_id, name_en, name_ur, perishability_class, default_unit)"
-            " VALUES (%s, %s, %s, %s, 'mann') ON CONFLICT DO NOTHING",
-            [(cid, c["name_en"], c["name_ur"], PERISHABILITY[cid]) for cid, c in spec["crops"].items()],
-        )
-
-
 def load(conn: psycopg.Connection, source: str, rows: Iterable[RawObs], raw_sha256: str,
          resolve: Callable[[str], str | None]) -> LoadResult:
     """Upsert every resolvable, valid row in one transaction; reloading the same file changes nothing."""
@@ -224,9 +208,8 @@ def main(argv: list[str] | None = None) -> int:
     if not url:
         print("loader: DATABASE_URL is not set", file=sys.stderr)
         return 1
-    spec = yaml.safe_load(SPEC.read_text(encoding="utf-8"))
     with psycopg.connect(url, autocommit=True) as conn:  # autocommit: each conn.transaction() is a real commit
-        seed_reference(conn, spec)
+        load_gazetteer(conn)
         res = load(conn, a.source, read_syn_csv(a.csv), hashlib.sha256(a.csv.read_bytes()).hexdigest(), name_resolver(conn))
     names = Counter(raw for _, raw in res.unmatched)
     print(f"loader: upserted {res.upserted}, unmatched {len(res.unmatched)} ({len(names)} names), rejected {len(res.rejected)}")

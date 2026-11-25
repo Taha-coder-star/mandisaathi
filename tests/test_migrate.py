@@ -16,6 +16,7 @@ TABLES = {
     "forecast", "outlook", "series_coverage", "model_registry",
     "inbound_event", "job", "outbound_message",
 }
+ALL = sorted(p.stem for p in MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"))
 
 
 def tables(url):
@@ -29,10 +30,10 @@ def history(url):
 
 
 def test_empty_db_then_idempotent_rerun(db):
-    assert migrate(db) == ["001_schema_v1"]
+    assert migrate(db) == ALL
     assert tables(db) == TABLES | {"schema_migrations"}
     before = history(db)
-    assert [v for v, _, _ in before] == ["001_schema_v1"]
+    assert [v for v, _, _ in before] == ALL
 
     assert migrate(db) == []
     assert history(db) == before  # same rows, checksums and applied_at
@@ -103,4 +104,4 @@ def test_concurrent_migrators_apply_once(db):
     for t in threads:
         t.join()
     assert errors == []
-    assert sorted(results) == [[], [], ["001_schema_v1"]]
+    assert sorted(results) == [[], [], ALL]

@@ -5,20 +5,19 @@ from decimal import Decimal
 from pathlib import Path
 
 import psycopg
-import yaml
 
 from app.migrate import migrate
-from mandi.ingest.loader import PKT, load, name_resolver, read_export_csv, seed_reference
+from mandi.gazetteer import load_gazetteer
+from mandi.ingest.loader import PKT, load, name_resolver, read_export_csv
 
 ROOT = Path(__file__).resolve().parent.parent
-SPEC = yaml.safe_load((ROOT / "data/synthetic/spec.yaml").read_text(encoding="utf-8"))
 FIXTURE = ROOT / "tests/fixtures/handmade_export_5rows.csv"
 
 
 def test_handmade_export_file_loads_through_the_shared_loader(db):
     migrate(db)
     with psycopg.connect(db, autocommit=True) as c:
-        seed_reference(c, SPEC)
+        load_gazetteer(c)
         res = load(c, "SYN", read_export_csv(FIXTURE), "h" * 64, name_resolver(c))  # SYN: hand-made, not market data
         rows = c.execute(
             "SELECT source, mandi_id, crop_id, grade, market_date, reported_at, min_pkr100kg, max_pkr100kg, avg_pkr100kg,"
