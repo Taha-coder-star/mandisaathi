@@ -162,10 +162,13 @@ def test_skip_locked_claimers_never_share_a_job(url):
         assert worker.claim(a) is None  # both are 'running' under a live lease
 
 
-def test_unknown_kind_dead_letters_at_once_and_placeholders_finish(url):
+def test_unknown_kind_dead_letters_at_once_and_known_kinds_finish(url):
     with connect(url) as c:
         u, t, s = add(c, kind="nope"), add(c, kind="turn", user_key="US.F"), add(c, kind="status", user_key="US.F")
-        while worker.run_one(c) is not None:
+        def noop(conn, job):  # real turn/status handlers (5.1) need inbound_event rows; they have own tests
+            pass
+
+        while worker.run_one(c, {"turn": noop, "status": noop}) is not None:
             pass
         assert state(c, u)[:3] == ("dead", 1, "unknown job kind 'nope'")  # no retries: it can never succeed
         assert [state(c, j)[:3] for j in (t, s)] == [("done", 1, None)] * 2
