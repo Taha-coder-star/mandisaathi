@@ -196,4 +196,4 @@ Task 4.4 benchmark texts (`data/benchmark/text.jsonl`, `tests/test_benchmark_tex
 - **Quantity labelled whenever present**, even if the tool does not use it (PRICE_NOW items T-RU-08, T-MX-04).
 - **Deviation (solo work):** gold is single-annotated by me, no second annotator. Instead: the validator test, plus a re-read of every line after at least a day, before the 9.4 freeze. The 2-rater rubric (17.2) is a later task.
 - These labelling rules become binding for 6.4, 7.1 and 15.3; change them before 9.4 if wrong.
-- DONE evidence: tests/test_benchmark_texts.py (5 tests). PR #<n> CI run: TBD.
+- DONE evidence: tests/test_benchmark_texts.py (5 tests). PR #20 CI run: https://github.com/Taha-coder-star/mandisaathi/actions/runs/45561379768.
