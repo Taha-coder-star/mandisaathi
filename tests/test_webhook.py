@@ -2,6 +2,7 @@ import hashlib
 import hmac
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from app.web import app
@@ -15,6 +16,7 @@ def client(monkeypatch):
     monkeypatch.setenv("META_APP_SECRET", SECRET)
     monkeypatch.setenv("WA_VERIFY_TOKEN", "test-verify-token")
     monkeypatch.setenv("PHONE_HASH_KEY", "test-hash-key")
+    monkeypatch.setenv("WA_NUMBER_ENC_KEY", Fernet.generate_key().decode())
     return TestClient(app)
 
 

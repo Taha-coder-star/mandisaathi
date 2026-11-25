@@ -8,6 +8,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pyyaml>=6",
     "numpy>=2",
+    "cryptography>=43",  # task 5.1: Fernet encrypts the sending phone number (file 07 §3, D-021)
 ]
 
 [project.optional-dependencies]

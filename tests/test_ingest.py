@@ -6,14 +6,16 @@ import re
 
 import psycopg
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from app import ingest
+from app import crypto, ingest
 from app.migrate import migrate
 from app.web import app
 
 SECRET = "test-app-secret"
 KEY = "test-hash-key"
+ENC_KEY = Fernet.generate_key().decode()  # task 5.1: encrypts the sending number (file 07 §3)
 PHONE = "923001234567"
 
 
@@ -21,6 +23,7 @@ def setenv(monkeypatch, database_url):
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setenv("META_APP_SECRET", SECRET)
     monkeypatch.setenv("PHONE_HASH_KEY", KEY)
+    monkeypatch.setenv("WA_NUMBER_ENC_KEY", ENC_KEY)
     return TestClient(app)
 
 
@@ -146,6 +149,23 @@ def test_db_down_is_503(nodb):
 def test_missing_hash_key_is_503(nodb, monkeypatch):
     monkeypatch.delenv("PHONE_HASH_KEY")
     assert post(nodb, messages(msg("wamid.K"))).status_code == 503
+
+
+def test_missing_enc_key_is_503(nodb, monkeypatch):
+    monkeypatch.delenv("WA_NUMBER_ENC_KEY")
+    assert post(nodb, messages(msg("wamid.E"))).status_code == 503
+
+
+def test_from_enc_decrypts_to_the_number_while_from_stays_hashed(client, db):
+    # task 5.1: the stored payload carries the number encrypted (from_enc, for sending) and hashed (message.from, for analysis)
+    assert post(client, messages(msg("wamid.ENC"))).status_code == 200
+    with psycopg.connect(db) as c:
+        from_enc, stored_from, text = c.execute(
+            "SELECT payload->>'from_enc', payload->'message'->>'from', payload::text FROM inbound_event"
+        ).fetchone()
+    assert crypto.decrypt(ENC_KEY, from_enc) == PHONE  # the send path can recover the real number
+    assert stored_from == ingest.phash(KEY, PHONE)     # the plaintext number is never stored
+    assert PHONE not in text
 
 
 @pytest.mark.parametrize("body", [b"{not json", b"[1]", json.dumps(envelope(messages=[{"timestamp": "1"}])).encode()])

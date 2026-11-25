@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 import psycopg
 from psycopg.types.json import Jsonb
 
+from app import crypto
+
 log = logging.getLogger(__name__)
 
 PHONE_KEYS = {"from", "wa_id", "new_wa_id", "recipient_id", "phone"}  # values are phone numbers in Meta payloads
@@ -23,7 +25,6 @@ INSERT INTO job (kind, user_key, payload) SELECT %s::text, user_key, jsonb_build
 """
 
 
-# shortcut: hash only; the encrypted number for sending (file 07 §3) is added in 5.1 before the first reply to a user with no user ID
 def phash(key: str, value: str) -> str:
     """Keyed hash of the digits only, so '+92 300-1234567' and '923001234567' give the same key."""
     return hmac.new(key.encode(), re.sub(r"\D", "", value).encode(), hashlib.sha256).hexdigest()
@@ -42,8 +43,13 @@ def _ts(item: dict) -> datetime:
     return datetime.fromtimestamp(int(item["timestamp"]), UTC)
 
 
-def events(data: dict, key: str) -> list[tuple]:
-    """(dedup_key, kind, user_key, wa_ts, payload, job_kind) per message/status. Raises KeyError etc. on a malformed payload."""
+def events(data: dict, key: str, enc_key: str) -> list[tuple]:
+    """(dedup_key, kind, user_key, wa_ts, payload, job_kind) per message/status. Raises KeyError etc. on a malformed payload.
+
+    `key` hashes numbers for analysis (task 3.1); `enc_key` encrypts the sender's number so the gateway (task 5.1) can
+    recover it to reply. The stored payload keeps the number only two ways: hashed inside `message.from` and, for
+    messages, encrypted as top-level `from_enc` (file 07 §3). A plain number never lands in the row.
+    """
     out = []
     for entry in data.get("entry", []):
         for change in entry.get("changes", []):
@@ -56,7 +62,10 @@ def events(data: dict, key: str) -> list[tuple]:
             base = {"metadata": value.get("metadata"), "contacts": value.get("contacts") or []}
             for m in value.get("messages") or []:
                 user = m.get("from_user_id") or (phash(key, m["from"]) if m.get("from") else None)
-                out.append((m["id"], "message", user, _ts(m), redact({**base, "message": m}, key), "turn"))
+                payload = redact({**base, "message": m}, key)
+                if m.get("from"):  # reversible copy for the send path; no "from" (BSUID-only) can't be replied to yet (D-013)
+                    payload["from_enc"] = crypto.encrypt(enc_key, m["from"])
+                out.append((m["id"], "message", user, _ts(m), payload, "turn"))
             for s in value.get("statuses") or []:
                 user = s.get("recipient_user_id") or (phash(key, s["recipient_id"]) if s.get("recipient_id") else None)
                 out.append((f'{s["id"]}:{s["status"]}', "status", user, _ts(s), redact({**base, "status": s}, key), "status"))
