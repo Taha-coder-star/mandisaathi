@@ -46,11 +46,12 @@ async def webhook_receive(request: Request):
     if not signature_ok(body, request.headers.get("X-Hub-Signature-256")):
         return Response(status_code=401)  # RFC §9: invalid → 401, never processed
     key = os.environ.get("PHONE_HASH_KEY", "")
-    if not key:
-        log.error("webhook: PHONE_HASH_KEY not set; not storing")
-        return Response(status_code=503)  # fail closed: never store unhashed numbers; Meta redelivers
+    enc_key = os.environ.get("WA_NUMBER_ENC_KEY", "")
+    if not key or not enc_key:
+        log.error("webhook: PHONE_HASH_KEY/WA_NUMBER_ENC_KEY not set; not storing")
+        return Response(status_code=503)  # fail closed: never store a number we can't both hash and encrypt; Meta redelivers
     try:
-        evs = ingest.events(json.loads(body), key)
+        evs = ingest.events(json.loads(body), key, enc_key)
     except (ValueError, KeyError, TypeError, AttributeError):
         log.warning("webhook: signed but malformed payload")
         return Response(status_code=400)

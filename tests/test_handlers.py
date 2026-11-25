@@ -1,0 +1,203 @@
+"""Task 5.1 DONE logic: the echo bot replies once and idempotently; status webhooks move outbound forward only (RFC C12, §13).
+
+Each test gets a throwaway database (`db` in conftest.py) and stubs the gateway, so no WhatsApp call leaves the process.
+The live "echo on all 3 phones; sent → delivered → read" check runs on the VM with the real token (see D-021).
+"""
+import psycopg
+import pytest
+from cryptography.fernet import Fernet
+from psycopg.types.json import Jsonb
+
+from app import crypto, gateway, handlers
+from app.migrate import migrate
+from app.worker import Job
+
+ENC_KEY = Fernet.generate_key().decode()
+NUMBER = "923001234567"
+
+
+@pytest.fixture
+def url(db, monkeypatch):
+    migrate(db)
+    monkeypatch.setenv("WA_NUMBER_ENC_KEY", ENC_KEY)
+    return db
+
+
+@pytest.fixture
+def conn(url):
+    with psycopg.connect(url, autocommit=True) as c:
+        yield c
+
+
+class StubGateway:
+    """Records mark_read / send_text calls; send_text returns a WAMID or raises a preset error."""
+    def __init__(self, monkeypatch, send_result="wamid.OUT"):
+        self.reads, self.sends, self.result = [], [], send_result
+        monkeypatch.setattr(gateway, "mark_read", lambda mid, typing=True: self.reads.append((mid, typing)))
+        monkeypatch.setattr(gateway, "send_text", self._send)
+
+    def _send(self, to, body):
+        self.sends.append((to, body))
+        if isinstance(self.result, BaseException):
+            raise self.result
+        return self.result
+
+
+@pytest.fixture
+def gw(monkeypatch):
+    return StubGateway(monkeypatch)
+
+
+_n = iter(range(1, 10_000))
+
+
+def seed_turn(conn, text="aloo ka rate", mtype="text", with_enc=True, user="US.F"):
+    """Insert an inbound message event + its turn job; return the Job the worker would hand the handler."""
+    wamid_in = f"wamid.IN{next(_n)}"
+    message = {"id": wamid_in, "type": mtype, "from": "HASHED"}
+    if mtype == "text":
+        message["text"] = {"body": text}
+    payload = {"metadata": {"display_phone_number": "15551914461"}, "message": message}
+    if with_enc:
+        payload["from_enc"] = crypto.encrypt(ENC_KEY, NUMBER)
+    eid = conn.execute(
+        "INSERT INTO inbound_event (dedup_key, kind, user_key, payload) VALUES (%s,'message',%s,%s) RETURNING id",
+        (wamid_in, user, Jsonb(payload)),
+    ).fetchone()[0]
+    jid = conn.execute(
+        "INSERT INTO job (kind, user_key, payload) VALUES ('turn',%s,%s) RETURNING id", (user, Jsonb({"event_id": eid}))
+    ).fetchone()[0]
+    return Job(jid, "turn", user, {"event_id": eid}, 1)
+
+
+def outbound(conn, job_id, seq=0):
+    """(status, wamid, body text, last_error) or None."""
+    return conn.execute(
+        "SELECT status, wamid, body->>'text', last_error FROM outbound_message WHERE job_id=%s AND seq=%s", (job_id, seq)
+    ).fetchone()
+
+
+# --- echo turn handler ------------------------------------------------------------------------------------------------
+
+def test_echo_sends_and_logs(conn, gw):
+    job = seed_turn(conn)
+    handlers.handle_turn(conn, job)
+    assert gw.reads == [("wamid.IN1", True)]                 # read receipt + typing on the inbound message
+    assert gw.sends == [(NUMBER, "Echo: aloo ka rate")]      # decrypted recipient, echoed text
+    assert outbound(conn, job.id) == ("sent", "wamid.OUT", "Echo: aloo ka rate", None)
+
+
+def test_non_text_message_echoes_a_note(conn, gw):
+    job = seed_turn(conn, mtype="image")
+    handlers.handle_turn(conn, job)
+    assert gw.sends == [(NUMBER, "Echo: received a image message")]
+
+
+def test_rerun_does_not_resend(conn, gw):
+    job = seed_turn(conn)
+    handlers.handle_turn(conn, job)
+    handlers.handle_turn(conn, job)  # a re-claim after the lease, say
+    assert len(gw.sends) == 1
+    assert outbound(conn, job.id)[0] == "sent"
+
+
+def test_no_from_enc_is_a_noop(conn, gw):
+    job = seed_turn(conn, with_enc=False)  # BSUID-only sender, no number to reply to (D-013)
+    handlers.handle_turn(conn, job)
+    assert gw.sends == [] and outbound(conn, job.id) is None
+
+
+def test_retryable_clears_the_row_and_reraises_then_succeeds(conn, monkeypatch):
+    gw = StubGateway(monkeypatch, send_result=gateway.SendRetryable("HTTP 503"))
+    job = seed_turn(conn)
+    with pytest.raises(gateway.SendRetryable):
+        handlers.handle_turn(conn, job)
+    assert outbound(conn, job.id) is None  # intent cleared so the worker's backoff retry starts clean
+    monkeypatch.setattr(gateway, "send_text", lambda to, body: (gw.sends.append((to, body)), "wamid.RETRY")[1])
+    handlers.handle_turn(conn, job)
+    assert outbound(conn, job.id) == ("sent", "wamid.RETRY", "Echo: aloo ka rate", None)
+
+
+def test_permanent_marks_failed_and_never_retries(conn, monkeypatch):
+    gw = StubGateway(monkeypatch, send_result=gateway.SendPermanent("HTTP 400 (code=131)"))
+    job = seed_turn(conn)
+    handlers.handle_turn(conn, job)  # no raise: retrying cannot help
+    status, wamid, _body, err = outbound(conn, job.id)
+    assert status == "failed" and wamid is None and "SendPermanent" in err
+    handlers.handle_turn(conn, job)
+    assert len(gw.sends) == 1  # not resent
+
+
+def test_ambiguous_stays_pending_and_never_resends(conn, monkeypatch):
+    gw = StubGateway(monkeypatch, send_result=gateway.SendAmbiguous("timeout"))
+    job = seed_turn(conn)
+    handlers.handle_turn(conn, job)  # no raise: maybe delivered
+    status, wamid, _body, err = outbound(conn, job.id)
+    assert status == "pending" and wamid is None and "SendAmbiguous" in err
+    handlers.handle_turn(conn, job)
+    assert len(gw.sends) == 1  # never blind-resent (RFC §13)
+
+
+def test_mark_read_failure_does_not_stop_the_reply(conn, monkeypatch):
+    gw = StubGateway(monkeypatch)
+    monkeypatch.setattr(gateway, "mark_read", lambda mid, typing=True: (_ for _ in ()).throw(gateway.SendRetryable("x")))
+    job = seed_turn(conn)
+    handlers.handle_turn(conn, job)
+    assert gw.sends == [(NUMBER, "Echo: aloo ka rate")] and outbound(conn, job.id)[0] == "sent"
+
+
+# --- status handler (forward-only) ------------------------------------------------------------------------------------
+
+def insert_outbound(conn, wamid="wamid.OUT", status="sent"):
+    jid = conn.execute("INSERT INTO job (kind, user_key) VALUES ('turn','US.F') RETURNING id").fetchone()[0]
+    conn.execute(
+        "INSERT INTO outbound_message (job_id, seq, user_key, wamid, body, status) VALUES (%s,0,'US.F',%s,%s,%s)",
+        (jid, wamid, Jsonb({"type": "text", "text": "hi"}), status),
+    )
+    return wamid
+
+
+def seed_status(conn, wamid, st, errors=None):
+    status = {"id": wamid, "status": st, "recipient_id": "HASHED"}
+    if errors:
+        status["errors"] = errors
+    payload = {"metadata": {"display_phone_number": "15551914461"}, "status": status}
+    eid = conn.execute(
+        "INSERT INTO inbound_event (dedup_key, kind, user_key, payload) VALUES (%s,'status','US.F',%s) RETURNING id",
+        (f"{wamid}:{st}:{next(_n)}", Jsonb(payload)),
+    ).fetchone()[0]
+    jid = conn.execute(
+        "INSERT INTO job (kind, user_key, payload) VALUES ('status','US.F',%s) RETURNING id", (Jsonb({"event_id": eid}),)
+    ).fetchone()[0]
+    return Job(jid, "status", "US.F", {"event_id": eid}, 1)
+
+
+def current(conn, wamid):
+    return conn.execute("SELECT status, last_error FROM outbound_message WHERE wamid=%s", (wamid,)).fetchone()
+
+
+def test_status_advances_sent_delivered_read(conn):
+    w = insert_outbound(conn, status="sent")
+    for st in ("delivered", "read"):
+        handlers.handle_status(conn, seed_status(conn, w, st))
+    assert current(conn, w)[0] == "read"
+
+
+def test_status_never_regresses(conn):
+    w = insert_outbound(conn, status="read")
+    handlers.handle_status(conn, seed_status(conn, w, "delivered"))  # out-of-order / duplicate
+    assert current(conn, w)[0] == "read"
+
+
+def test_status_failed_is_terminal(conn):
+    w = insert_outbound(conn, status="sent")
+    handlers.handle_status(conn, seed_status(conn, w, "failed", errors=[{"code": 131026}]))
+    assert current(conn, w) == ("failed", "meta error code=131026")
+    handlers.handle_status(conn, seed_status(conn, w, "delivered"))  # a late delivered must not revive it
+    assert current(conn, w)[0] == "failed"
+
+
+def test_status_for_unknown_wamid_is_a_noop(conn):
+    insert_outbound(conn, wamid="wamid.KNOWN", status="sent")
+    handlers.handle_status(conn, seed_status(conn, "wamid.GHOST", "delivered"))  # no row: must not error
+    assert current(conn, "wamid.KNOWN")[0] == "sent"

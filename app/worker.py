@@ -14,6 +14,8 @@ from typing import NamedTuple
 
 import psycopg
 
+from app import handlers
+
 log = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 5                # then dead-letter (RFC §13 "max 5", D-017)
@@ -41,12 +43,9 @@ class Job(NamedTuple):
     attempts: int  # including the current run
 
 
-def noop(conn, job: Job):
-    log.info("job %s: no %s handler yet (task 5.1); marked done", job.id, job.kind)
-
-
-# kind -> handler(conn, job). A handler raises to fail the attempt. Placeholders until 5.1 adds the real ones.
-HANDLERS = {"turn": noop, "status": noop}
+# kind -> handler(conn, job). A handler raises to fail the attempt (worker retries, then dead-letters). Added in task 5.1;
+# `turn` is the temporary echo bot (task 6.2 replaces it), `status` is the forward-only delivery-receipt updater.
+HANDLERS = {"turn": handlers.handle_turn, "status": handlers.handle_status}
 
 
 def backoff(attempt: int) -> timedelta:
