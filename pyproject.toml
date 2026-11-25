@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff>=0.6", "pytest>=8", "httpx>=0.27"]
+report = ["matplotlib>=3.9"]  # charts for results/E* only (task 5.3); not in the image
 
 [build-system]
 requires = ["setuptools>=69"]
