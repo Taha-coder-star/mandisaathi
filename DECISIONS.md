@@ -182,3 +182,18 @@ Task 4.3 crop + place gazetteer v0 (`mandi/gazetteer.yaml`, `mandi/gazetteer.py`
 - **Ingest matching unchanged:** `make_matcher` keeps its three reviewed aliases (D-018) and does not read the gazetteer, so the pinned unmatched set stays `{"Ukara"}`. `Ukara` is a chat alias of OKARA here. Closes D-018's "until 4.3" shortcut: ingest keeps its own reviewed aliases, the gazetteer serves chat.
 - **BELIEF items:** ganda/gandha = onion in Punjabi (file 03 §4.2 BELIEF · VERIFY); munji = paddy; الو kept as a POTATO VOICE_STT alias (آلو without madda; also means "owl"); "jang" omitted for Jhang (means war). Risk: short aliases (ganda, الو, khan) can mis-match once task 6.1 scans whole messages.
 - DONE evidence: `tests/test_gazetteer.py::test_gazetteer_loads_and_reload_changes_nothing`, `::test_alias_list_has_at_least_60_cases`, `::test_alias_list_matches_gazetteer`. CI run: https://github.com/Taha-coder-star/mandisaathi/actions/runs/45558233107.
+
+## D-020 · 2026-11-25 · Taha · CONFIRMED
+Task 4.4 benchmark texts (`data/benchmark/text.jsonl`, `tests/test_benchmark_texts.py`, `data/benchmark/SPEC.md` §2/§2.5 updated), file 05 §4.1, SPEC §2.1/§3.1. Choices where the plan does not say:
+- **All 40 written now** (DONE needs ≥ 20). Items written by me, none from farmer chats, no phone numbers or real people's names (Meta §4.7, R-32).
+- **Canonicals = gazetteer ids** (D-019) instead of waiting for 6.1. The SPEC example tag `place_alias` on "Okara" is dropped ("Okara" is `name_en`, not an alias).
+- **Two crops in one message (T-AMB-06):** outcome ANSWER; `slots.crop` and `tool` are lists of two (file 06 §5, file 09 §0). It stays in the AMB category as SPEC §3.1 lists it but is not a clarify item; clarify scoring uses `gold.outcome` (SPEC §4).
+- **Tools and args per SPEC §2.5 table:** alerts use `set_alert {crop, mandi, direction, threshold}` with threshold in PKR per mann (RFC §7; file 10 scenario 4), `alert_action = SUBSCRIBE`; STOP → `stop {}`; HELP/OTHER no tool; CLARIFY, OUT_OF_COVERAGE and OUT_OF_SCOPE call no tool (file 06 §4; file 09 §0).
+- **Out-of-coverage crops** kapas/rice → `crop.id = OUT_OF_COVERAGE` (SPEC enum), not COTTON/RICE. WHEAT keeps its id and appears only under OUTLOOK.
+- **OUTLOOK gold** = `get_outlook` + ANSWER; the FYP-I "FYP-II mein" wording (file 10 C4) is reply content, not gold.
+- **Horizons:** "kal"/"کل" with a future verb → DAYS h = 1; bare "kal ka rate" → AMBIGUOUS (intent PRICE_NOW, CLARIFY horizon); "agle hafte"/"next week" → DAYS h = 7; a month name → the next such month after 2026-12-11 (February → 2027-02, April → 2027-04).
+- **clarify_slot** = the first missing slot in the order crop, place, quantity_unit, horizon.
+- **Quantity labelled whenever present**, even if the tool does not use it (PRICE_NOW items T-RU-08, T-MX-04).
+- **Deviation (solo work):** gold is single-annotated by me, no second annotator. Instead: the validator test, plus a re-read of every line after at least a day, before the 9.4 freeze. The 2-rater rubric (17.2) is a later task.
+- These labelling rules become binding for 6.4, 7.1 and 15.3; change them before 9.4 if wrong.
+- DONE evidence: tests/test_benchmark_texts.py (5 tests). PR #<n> CI run: TBD.
