@@ -21,17 +21,17 @@ Meta setup moved to a second account (tasks 1.1–1.2). The first MandiSaathi po
 - Token diary: system-user token, permissions `whatsapp_business_messaging` + `whatsapp_business_management`, expiry **never**. Re-check with `python scripts/check_token.py`. If it is ever revoked, regenerate it under System users → agrios.
 - Evidence: `check_token.py` on 2026-11-23 printed `type=SYSTEM_USER expires=never` and confirmed the number in the WABA (quality GREEN).
 
-## D-005 · 2026-11-23 · Taha · REPORTED (Meta review pending)
+## D-005 · 2026-11-23 · Taha · REPORTED (all 4 approved 2026-11-25)
 Task 1.3: templates submitted to the test WABA with `python scripts/submit_templates.py` (re-run it to see current status).
-| name | lang | requested | status 23 Nov | category after review |
-|---|---|---|---|---|
-| price_alert | en | UTILITY | PENDING | UTILITY (at submission) |
-| price_alert | ur | UTILITY | PENDING | UTILITY (at submission) |
-| daily_rates | en | UTILITY | PENDING | UTILITY (at submission) |
-| daily_rates | ur | UTILITY | PENDING | UTILITY (at submission) |
+| name | lang | requested | status 23 Nov | status 25 Nov | category after review |
+|---|---|---|---|---|---|
+| price_alert | en | UTILITY | PENDING | APPROVED | UTILITY |
+| price_alert | ur | UTILITY | PENDING | APPROVED | UTILITY |
+| daily_rates | en | UTILITY | PENDING | APPROVED | MARKETING (Meta re-categorised on 23 Nov evening) |
+| daily_rates | ur | UTILITY | PENDING | APPROVED | MARKETING (Meta re-categorised on 23 Nov evening) |
 - `ur` versions are **Roman Urdu** filed under the `ur` code (user's choice). If Meta rejects them for language mismatch, resubmit in Urdu script.
 - Source and date are variables, so FYP-I fills source with "Demo data (synthetic)" and FYP-II needs no resubmission. Prices per 100 kg.
-- Open: file 02 R9 (is a requested alert UTILITY, is a digest MARKETING?) is answered only once review ends. Update this table then; Meta may recategorise after approval.
+- File 02 R9 answered 2026-11-25: a requested price alert passed review as UTILITY; the daily digest (daily_rates) was re-categorised MARKETING. Meta may still recategorise later; re-run `python scripts/submit_templates.py` to see current status.
 
 ## D-006 · 2026-11-23 · Taha · CONFIRMED
 Task 1.4 stack choices (the plan names none of these):
@@ -168,7 +168,7 @@ Task 4.2 mandi name matching (`mandi/ingest/loader.py` `name_key`, `make_matcher
 - **No migration;** aliases move to the 4.3 gazetteer. Supersedes the "until task 4.2" lines in D-014 (exact names only) and D-015 (`Lahore (Badami Bagh)` unmatched): that row now loads as LAHORE POTATO, and the contract test expects 4 rows loaded, none unmatched.
 - **Deviation (solo work) from "unmatched list reviewed by a second member":** I review it myself and commit it. `python -m mandi.ingest.loader data/synthetic/syn.csv --source SYN --unmatched docs/reviews/4.2_unmatched_syn.csv` writes `mandi_raw,rows,first_ref`, most frequent first. Verdict: the only unmatched name is `Ukara` (502 rows, an Okara variant). Keep refusing it: `Ukara` → OKARA is a vowel change on a 5-letter name (skeleton `kr` is too short; ratio 0.80 < 0.85), and accepting it would need a looser rule that also takes real near-misses. Task 4.3 may add it as an alias. The test pins the unmatched set to `{"Ukara"}`, so any change in matching shows up as a failing test and needs a new review here.
 - **Known limit:** the skeleton tier is loose for short names (`Lahar`, `Lahori` → LAHORE; `Kasar` → KASUR). Acceptable for ingest of a fixed source; chat place resolution (task 6.1) must use its own resolver with AMBIGUOUS handling and echo the canonical name (file 03 §4.3), not this matcher.
-- DONE evidence: 97.4% of variant rows matched (18,944 of 19,446; full syn.csv a8bdf852, load: 129,552 upserted, 502 unmatched), 0 matched to a wrong mandi, 1 name unmatched (`Ukara`); `tests/test_name_matching.py::test_generated_variants_map_back_to_their_mandi`. CI run: TBD.
+- DONE evidence: 97.4% of variant rows matched (18,944 of 19,446; full syn.csv a8bdf852, load: 129,552 upserted, 502 unmatched), 0 matched to a wrong mandi, 1 name unmatched (`Ukara`); `tests/test_name_matching.py::test_generated_variants_map_back_to_their_mandi`. PR #16 CI run 45549254618 green (secrets, test, image).
 
 ## D-019 · 2026-11-25 · Taha · CONFIRMED
 Task 4.3 crop + place gazetteer v0 (`mandi/gazetteer.yaml`, `mandi/gazetteer.py`, `app/migrations/002_place_province.sql`, `tests/fixtures/alias_cases.csv`, `tests/test_gazetteer.py`; `mandi/ingest/loader.py`, `tests/test_loader.py`, `tests/test_loader_contract.py`, `tests/test_migrate.py`, `pyproject.toml`, `scripts/smoke_roles.sh` updated), file 03 §3.2/§4, RFC §8/§15. Choices where the plan does not say:
