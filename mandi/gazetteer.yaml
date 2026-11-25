@@ -1,0 +1,207 @@
+# Crop + place gazetteer v0 (task 4.3; file 03 §3.2/§4, RFC §8; DECISIONS.md D-019).
+# Load: python -m mandi.gazetteer (needs DATABASE_URL). The price loader loads it too.
+# Aliases are stored normalised (mandi.gazetteer.norm); write them in any case/punctuation.
+# name_en and name_ur are added as aliases automatically (crops: OFFICIAL / URDU_SCRIPT).
+# Alias kinds = crop_alias.kind. place_alias has no kind column, so place alias kinds live only here.
+# Only aliases under `ambiguous:` may name more than one target; any other collision fails the load.
+version: v0
+
+crops:
+  ONION:
+    name_en: Onion
+    name_ur: "پیاز"
+    perishability: MED          # ASSUMPTION (D-014)
+    default_unit: mann
+    covered: true
+    aliases:
+      COMMON: [pyaz]
+      MISSPELLING: [piaz, payaz, pyaaz, piyaz]
+      PUNJABI: [ganda, gandha, "گنڈا"]            # BELIEF · VERIFY (file 03 §4.2)
+      VOICE_STT: [piyaaz, pyaj, "प्याज"]
+  TOMATO:
+    name_en: Tomato
+    name_ur: "ٹماٹر"
+    perishability: HIGH         # ASSUMPTION (D-014)
+    default_unit: mann
+    covered: true
+    aliases:
+      COMMON: [tamatar]
+      MISSPELLING: [timatar, tamater, tomatar, tamaatar]
+      VOICE_STT: ["टमाटर"]
+  POTATO:
+    name_en: Potato
+    name_ur: "آلو"
+    perishability: MED          # ASSUMPTION (D-014)
+    default_unit: mann
+    covered: true
+    aliases:
+      COMMON: [aloo]
+      MISSPELLING: [alu, aaloo, aalu]
+      VOICE_STT: ["الو", "आलू"]                   # الو = آلو without madda (also "owl"; BELIEF, D-019)
+  WHEAT:                        # F3 only; not a covered crop (file 10 §3/§5a, RFC §15)
+    name_en: Wheat
+    name_ur: "گندم"
+    perishability: LOW          # ASSUMPTION (D-014)
+    default_unit: mann
+    covered: false
+    aliases:
+      COMMON: [gandum]
+      MISSPELLING: [gandam]
+      PUNJABI: [kanak, "کنک"]
+      VOICE_STT: ["गेहूं"]
+  COTTON:                       # here only so "kapas ka rate" is OUT_OF_COVERAGE (file 05 §4.1); perishability/unit ASSUMPTION, never shown
+    name_en: Cotton
+    name_ur: "کپاس"
+    perishability: LOW
+    default_unit: mann
+    covered: false
+    aliases:
+      COMMON: [kapas, phutti]
+      MISSPELLING: [kapaas]
+  RICE:                         # same reason as COTTON
+    name_en: Rice
+    name_ur: "چاول"
+    perishability: LOW
+    default_unit: mann
+    covered: false
+    aliases:
+      COMMON: [chawal]
+      PUNJABI: [munji]          # paddy; BELIEF (D-019)
+
+# The 15 spec mandis (data/synthetic/spec.yaml; a test checks they match). Coordinates are city centres (D-011).
+# Each is also a CITY place with the same id, province Punjab, itself as the only candidate mandi.
+# Not "jang" for Jhang: it means war.
+mandis:
+  - id: LAHORE
+    name_en: Lahore
+    name_ur: "لاہور"
+    district: Lahore
+    lat: 31.550
+    lon: 74.344
+    aliases: {COMMON: [lhr], MISSPELLING: [lahor, lahaur, lahour], VOICE_STT: ["लाहौर"]}
+  - id: OKARA
+    name_en: Okara
+    name_ur: "اوکاڑہ"
+    district: Okara
+    lat: 30.809
+    lon: 73.454
+    aliases: {MISSPELLING: [okarah, okaara, ukara], URDU_SCRIPT: ["اوکاڑا"]}
+  - id: SAHIWAL
+    name_en: Sahiwal
+    name_ur: "ساہیوال"
+    district: Sahiwal
+    lat: 30.661
+    lon: 73.108
+    aliases: {COMMON: [montgomery], MISSPELLING: [sahiwaal, saiwal, sahiwall]}
+  - id: KASUR
+    name_en: Kasur
+    name_ur: "قصور"
+    district: Kasur
+    lat: 31.117
+    lon: 74.450
+    aliases: {MISSPELLING: [kasoor, qasur, qasoor]}
+  - id: FAISALABAD
+    name_en: Faisalabad
+    name_ur: "فیصل آباد"
+    district: Faisalabad
+    lat: 31.417
+    lon: 73.091
+    aliases: {COMMON: [lyallpur, fsd, faisal abad], MISSPELLING: [faislabad, faisalabaad], URDU_SCRIPT: ["فیصلآباد", "لائلپور"]}
+  - id: MULTAN
+    name_en: Multan
+    name_ur: "ملتان"
+    district: Multan
+    lat: 30.198
+    lon: 71.470
+    aliases: {MISSPELLING: [multaan, mooltan, multann], VOICE_STT: ["मुल्तान"]}
+  - id: GUJRANWALA
+    name_en: Gujranwala
+    name_ur: "گوجرانوالہ"
+    district: Gujranwala
+    lat: 32.157
+    lon: 74.190
+    aliases: {MISSPELLING: [gujranwalla, gujranwaala, gujrawala], URDU_SCRIPT: ["گوجرانوالا"]}
+  - id: SARGODHA
+    name_en: Sargodha
+    name_ur: "سرگودھا"
+    district: Sargodha
+    lat: 32.084
+    lon: 72.671
+    aliases: {MISSPELLING: [sargoda, sargodah, sargodhaa], URDU_SCRIPT: ["سرگودہا"]}
+  - id: BAHAWALPUR
+    name_en: Bahawalpur
+    name_ur: "بہاولپور"
+    district: Bahawalpur
+    lat: 29.396
+    lon: 71.684
+    aliases: {MISSPELLING: [bahawalpoor, bahalpur, bhawalpur], VOICE_STT: ["बहावलपुर"]}
+  - id: SHEIKHUPURA
+    name_en: Sheikhupura
+    name_ur: "شیخوپورہ"
+    district: Sheikhupura
+    lat: 31.711
+    lon: 73.988
+    aliases: {MISSPELLING: [sheikhupurah, shaikhupura, shekhupura], URDU_SCRIPT: ["شیخوپورا"]}
+  - id: PAKPATTAN
+    name_en: Pakpattan
+    name_ur: "پاکپتن"
+    district: Pakpattan
+    lat: 30.344
+    lon: 73.384
+    aliases: {COMMON: [pakpattan sharif], MISSPELLING: [pak pattan, pakpatan], URDU_SCRIPT: ["پاک پتن"]}
+  - id: VEHARI
+    name_en: Vehari
+    name_ur: "وہاڑی"
+    district: Vehari
+    lat: 30.042
+    lon: 72.353
+    aliases: {MISSPELLING: [vihari, wehari, vehary], URDU_SCRIPT: ["وہاری"]}
+  - id: JHANG
+    name_en: Jhang
+    name_ur: "جھنگ"
+    district: Jhang
+    lat: 31.269
+    lon: 72.316
+    aliases: {MISSPELLING: [jhung, jhaang], URDU_SCRIPT: ["جہنگ"], VOICE_STT: ["झंग"]}
+  - id: DGKHAN
+    name_en: Dera Ghazi Khan
+    name_ur: "ڈیرہ غازی خان"
+    district: Dera Ghazi Khan
+    lat: 30.033
+    lon: 70.640
+    aliases: {COMMON: [dg khan, D.G. Khan, dgkhan, dgk], MISSPELLING: [dera gazi khan], URDU_SCRIPT: ["ڈی جی خان"]}
+  - id: RYKHAN
+    name_en: Rahim Yar Khan
+    name_ur: "رحیم یار خان"
+    district: Rahim Yar Khan
+    lat: 28.420
+    lon: 70.300
+    aliases: {COMMON: [ryk], MISSPELLING: [rahimyar khan, rahim yaar khan, raheem yar khan], URDU_SCRIPT: ["رحیمیار خان"]}
+
+# Outside Punjab -> OUT_OF_COVERAGE (file 03 §4.3). Coordinates: Wikipedia coordinates API (en.wikipedia.org,
+# prop=coordinates, redirects=1), fetched 2026-11-25, rounded to 3 dp. Hyderabad = article "Hyderabad, Pakistan".
+other_places:
+  - {id: HYDERABAD, name_en: Hyderabad, name_ur: "حیدرآباد", kind: CITY, district: Hyderabad, province: Sindh,
+     lat: 25.379, lon: 68.368, aliases: {MISSPELLING: [haiderabad, hyderabad sindh], URDU_SCRIPT: ["حیدر آباد"]}}
+  - {id: KARACHI, name_en: Karachi, name_ur: "کراچی", kind: CITY, district: Karachi, province: Sindh,
+     lat: 24.860, lon: 67.010, aliases: {COMMON: [khi], MISSPELLING: [krachi]}}
+  - {id: SUKKUR, name_en: Sukkur, name_ur: "سکھر", kind: CITY, district: Sukkur, province: Sindh,
+     lat: 27.706, lon: 68.848, aliases: {MISSPELLING: [sukhar, sakhar]}}
+  - {id: PESHAWAR, name_en: Peshawar, name_ur: "پشاور", kind: CITY, district: Peshawar, province: Khyber Pakhtunkhwa,
+     lat: 34.014, lon: 71.568, aliases: {MISSPELLING: [pishawar, peshawer]}}
+  - {id: DIKHAN, name_en: Dera Ismail Khan, name_ur: "ڈیرہ اسماعیل خان", kind: CITY, district: Dera Ismail Khan,
+     province: Khyber Pakhtunkhwa, lat: 31.831, lon: 70.902, aliases: {COMMON: [d i khan, di khan], URDU_SCRIPT: ["ڈی آئی خان"]}}
+  - {id: QUETTA, name_en: Quetta, name_ur: "کوئٹہ", kind: CITY, district: Quetta, province: Balochistan,
+     lat: 30.196, lon: 67.017, aliases: {MISSPELLING: [kwetta, koita]}}
+  - {id: ISLAMABAD, name_en: Islamabad, name_ur: "اسلام آباد", kind: CITY, district: Islamabad, province: Islamabad Capital Territory,
+     lat: 33.693, lon: 73.064, aliases: {COMMON: [isb], MISSPELLING: [islamabaad]}}
+
+# Designed-ambiguous aliases: the resolver must answer AMBIGUOUS and ask (file 03 §4.3).
+ambiguous:
+  crop:
+    sabzi: [ONION, TOMATO, POTATO]
+    sabziyan: [ONION, TOMATO, POTATO]
+    "سبزی": [ONION, TOMATO, POTATO]
+  place:
+    khan: [DGKHAN, RYKHAN]
+    "خان": [DGKHAN, RYKHAN]
