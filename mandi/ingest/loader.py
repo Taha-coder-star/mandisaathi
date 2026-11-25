@@ -1,20 +1,25 @@
 """Load a price file into price_obs (task 3.2; file 03 §3, DECISIONS.md D-014).
 
-  python -m mandi.ingest.loader <file.csv> --source SYN|SYN-NULL      (needs DATABASE_URL)
+  python -m mandi.ingest.loader <file.csv> --source SYN|SYN-NULL [--unmatched out.csv]   (needs DATABASE_URL)
 
 A reader turns one file format into RawObs rows; everything after it (units, reported_at, upsert) is shared.
 read_export_csv is the real-data contract (task 3.3, D-015): FYP-II fits it to the real sample and adds the
-real unit spellings to TO_PER_100KG; nothing after the reader changes.
+real unit spellings to TO_PER_100KG; nothing after the reader changes. Mandi names: make_matcher (task 4.2, D-018).
 """
 import argparse
 import csv
+import functools
 import hashlib
 import os
+import re
 import sys
+import unicodedata
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import psycopg
@@ -26,6 +31,9 @@ PUBLISH_TIME = time(18, 0)  # file 03 §3 ASSUMPTION: knowable from 18:00 PKT on
 # anything else is rejected, never guessed; "per 40 kg"/"per 100 kg" are the request's wording (ASSUMPTION, D-015)
 TO_PER_100KG = {"PKR/100kg": Decimal(1), "PKR/40kg": Decimal("2.5"), "per 100 kg": Decimal(1), "per 40 kg": Decimal("2.5")}
 PERISHABILITY = {"TOMATO": "HIGH", "ONION": "MED", "POTATO": "MED", "WHEAT": "LOW"}  # ASSUMPTION (D-014); 4.3 owns crops
+# old/short names no spelling rule can reach (D-018). shortcut: hard-coded until 4.3's gazetteer owns aliases
+MANDI_ALIASES: dict[str, tuple[str, ...]] = {"FAISALABAD": ("Lyallpur",), "SAHIWAL": ("Montgomery",), "RYKHAN": ("RYK",)}
+FUZZY_MIN, FUZZY_MARGIN = 0.85, 0.15  # file 03 §4.3: one candidate >= 0.85 and >= 0.15 ahead of the next
 
 COLS = ["source", "mandi_id", "crop_id", "grade", "market_date", "reported_at", "min_pkr100kg", "max_pkr100kg", "avg_pkr100kg",
         "unit_raw", "value_raw", "arrivals_qty", "arrivals_unit", "raw_ref", "raw_sha256"]
@@ -53,7 +61,7 @@ class RawObs:
 @dataclass
 class LoadResult:
     upserted: int = 0
-    unmatched: list[tuple[str, str]] = field(default_factory=list)  # (raw_ref, mandi_raw): not loaded; task 4.2 maps them
+    unmatched: list[tuple[str, str]] = field(default_factory=list)  # (raw_ref, mandi_raw): no confident match, not loaded
     rejected: list[tuple[str, str]] = field(default_factory=list)  # (raw_ref, reason)
 
 
@@ -122,12 +130,53 @@ def to_price_row(obs: RawObs, mandi_id: str) -> dict:
     }
 
 
-def exact_resolver(conn: psycopg.Connection) -> Callable[[str], str | None]:
-    """mandi_id or name_en, case-insensitive. shortcut: exact names only; task 4.2 replaces it with variant matching."""
-    names = {}
-    for mandi_id, name_en in conn.execute("SELECT mandi_id, name_en FROM mandi"):
-        names[mandi_id.lower()] = names[name_en.lower()] = mandi_id
-    return lambda raw: names.get(raw.strip().lower())
+def name_key(raw: str) -> str:
+    """'Lahore (Badami Bagh) Mandi' -> 'lahore': NFKC, casefold, no (...) groups, no spaces/punctuation, no word 'mandi'."""
+    s = re.sub(r"\([^)]*\)", " ", unicodedata.normalize("NFKC", raw).casefold())
+    return "".join(t for t in re.split(r"\W+", s) if t != "mandi")
+
+
+def _skeleton(key: str) -> str:
+    """Consonant skeleton: q=k, w=v, vowels and y dropped, repeated letters collapsed ('multaan' -> 'mltn')."""
+    return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiouy]", "", key.replace("q", "k").replace("w", "v")))
+
+
+def make_matcher(mandis: Iterable[tuple[str, str]],
+                 aliases: dict[str, tuple[str, ...]] = MANDI_ALIASES) -> Callable[[str], str | None]:
+    """(mandi_id, name_en) pairs -> raw name -> mandi_id or None. Tiers: exact key (id, name, alias); a consonant
+    skeleton of >= 3 letters that only one mandi has; difflib ratio >= FUZZY_MIN and FUZZY_MARGIN ahead of every
+    other mandi. Anything else is unmatched, never guessed. Raises ValueError if one key names two mandis."""
+    exact: dict[str, str] = {}
+    for mandi_id, name_en in mandis:
+        for k in (name_key(n) for n in (mandi_id, name_en, *aliases.get(mandi_id, ()))):
+            if exact.setdefault(k, mandi_id) != mandi_id:
+                raise ValueError(f"name key {k!r} points to both {exact[k]} and {mandi_id}")
+    skeletons: dict[str, set[str]] = {}
+    for k, mandi_id in exact.items():
+        skeletons.setdefault(_skeleton(k), set()).add(mandi_id)
+
+    @functools.cache
+    def match(raw: str) -> str | None:
+        key = name_key(raw)
+        if not key:
+            return None
+        if key in exact:
+            return exact[key]
+        sk = _skeleton(key)
+        if len(sk) >= 3 and len(skeletons.get(sk, ())) == 1:
+            return next(iter(skeletons[sk]))
+        best: dict[str, float] = {}
+        for k, mandi_id in exact.items():
+            best[mandi_id] = max(best.get(mandi_id, 0.0), SequenceMatcher(None, key, k).ratio())
+        top, second = (sorted(best.values(), reverse=True) + [0.0, 0.0])[:2]
+        return max(best, key=best.get) if top >= FUZZY_MIN and top - second >= FUZZY_MARGIN else None  # tie: margin 0, refused
+
+    return match
+
+
+def name_resolver(conn: psycopg.Connection) -> Callable[[str], str | None]:
+    """make_matcher over the mandi table."""
+    return make_matcher(conn.execute("SELECT mandi_id, name_en FROM mandi").fetchall())
 
 
 def seed_reference(conn: psycopg.Connection, spec: dict) -> None:
@@ -169,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Load a generator CSV into price_obs (task 3.2).")
     ap.add_argument("csv", type=Path)
     ap.add_argument("--source", required=True, choices=["SYN", "SYN-NULL"])
+    ap.add_argument("--unmatched", type=Path, help="write unmatched names for review: CSV mandi_raw,rows,first_ref")
     a = ap.parse_args(argv)
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -177,8 +227,15 @@ def main(argv: list[str] | None = None) -> int:
     spec = yaml.safe_load(SPEC.read_text(encoding="utf-8"))
     with psycopg.connect(url, autocommit=True) as conn:  # autocommit: each conn.transaction() is a real commit
         seed_reference(conn, spec)
-        res = load(conn, a.source, read_syn_csv(a.csv), hashlib.sha256(a.csv.read_bytes()).hexdigest(), exact_resolver(conn))
-    print(f"loader: upserted {res.upserted}, unmatched {len(res.unmatched)}, rejected {len(res.rejected)}")
+        res = load(conn, a.source, read_syn_csv(a.csv), hashlib.sha256(a.csv.read_bytes()).hexdigest(), name_resolver(conn))
+    names = Counter(raw for _, raw in res.unmatched)
+    print(f"loader: upserted {res.upserted}, unmatched {len(res.unmatched)} ({len(names)} names), rejected {len(res.rejected)}")
+    if a.unmatched:
+        first = {raw: ref for ref, raw in reversed(res.unmatched)}  # reversed: the earliest ref wins
+        with open(a.unmatched, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f, lineterminator="\n")
+            w.writerow(["mandi_raw", "rows", "first_ref"])
+            w.writerows((raw, n, first[raw]) for raw, n in names.most_common())
     return 0
 
 
