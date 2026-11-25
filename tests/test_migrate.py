@@ -15,6 +15,7 @@ TABLES = {
     "price_obs", "weather_daily", "macro_monthly", "data_health",
     "forecast", "outlook", "series_coverage", "model_registry",
     "inbound_event", "job", "outbound_message",
+    "wa_user", "query_state", "stop_tally",
 }
 ALL = sorted(p.stem for p in MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"))
 

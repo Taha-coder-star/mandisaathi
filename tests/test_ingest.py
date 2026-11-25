@@ -9,7 +9,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from app import crypto, gateway, ingest
+from app import crypto, gateway, handlers, ingest
 from app.migrate import migrate
 from app.web import app
 from app.worker import run_one
@@ -108,8 +108,9 @@ def test_m1_replay_one_event_one_reply(client, db, monkeypatch):
             pass
         assert conn.execute("SELECT count(*) FROM inbound_event").fetchone()[0] == 1
         assert conn.execute("SELECT status FROM job").fetchall() == [("done",)]
-        assert conn.execute("SELECT status, wamid FROM outbound_message").fetchall() == [("sent", "wamid.OUT1")]
-    assert sends == [(PHONE, "Echo: aloo ka rate")]
+        out = conn.execute("SELECT seq, status, wamid FROM outbound_message ORDER BY seq").fetchall()
+        assert out == [(0, "sent", "wamid.OUT1"), (1, "sent", "wamid.OUT2")]  # first contact: consent, then the reply
+    assert sends == [(PHONE, handlers.CONSENT_TEXT), (PHONE, "Echo: aloo ka rate")]
 
 
 def test_multi_message_payload(client, db):

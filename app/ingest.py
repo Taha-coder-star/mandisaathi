@@ -72,7 +72,7 @@ def events(data: dict, key: str, enc_key: str) -> list[tuple]:
     return out
 
 
-# shortcut: one job per event, no per-farmer coalescing; coalescing in 6.2, debounce in 14.1
+# one job per event; the turn handler coalesces a farmer's pending messages (6.2); debounce is 14.1
 # shortcut: new connection per request, no pool; fine at <=1 msg/s (RFC §14)
 def store(conninfo: str, evs: list[tuple]) -> int:
     """Insert all events and their jobs in ONE transaction; return how many were new. Any error rolls back everything."""
