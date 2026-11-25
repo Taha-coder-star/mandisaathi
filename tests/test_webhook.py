@@ -64,3 +64,9 @@ def test_bad_post_rejected(client, headers):
 def test_post_rejected_when_secret_unset(client, monkeypatch):
     monkeypatch.delenv("META_APP_SECRET")
     assert post(client, {"X-Hub-Signature-256": sign(BODY, "")}).status_code == 401
+
+
+def test_privacy_page_is_public_html(client):
+    r = client.get("/privacy")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert "STOP" in r.text and "synthetic" in r.text
