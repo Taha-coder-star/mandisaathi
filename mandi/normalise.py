@@ -34,7 +34,10 @@ def _tidy(d: Decimal) -> Decimal:
 # --- number words (roman; Urdu-script numbers come in as digits) ------------------------------------------------------
 _INT = {"ek": 1, "do": 2, "teen": 3, "tin": 3, "char": 4, "chaar": 4, "panch": 5, "paanch": 5,
         "che": 6, "chhe": 6, "cheh": 6, "saat": 7, "aath": 8, "nau": 9, "das": 10, "dus": 10,
-        "bees": 20, "pachas": 50, "pachaas": 50}
+        "gyarah": 11, "barah": 12, "terah": 13, "chaudah": 14, "pandrah": 15, "solah": 16, "satrah": 17,
+        "atharah": 18, "unnees": 19, "bees": 20, "pachees": 25, "tees": 30, "chalees": 40, "pachas": 50,
+        "pachaas": 50, "sattar": 70, "pachattar": 75, "assi": 80, "nabbe": 90}
+# shortcut: 60 ("saath") is left out (it also means "with"); other 21-99 words return None (ask). Add if the benchmark needs them.
 _HALF = {"dedh": Decimal("1.5"), "derh": Decimal("1.5"), "dhai": Decimal("2.5"), "adha": Decimal("0.5")}
 _MOD = {"sawa": Decimal("0.25"), "saade": Decimal("0.5"), "sadhe": Decimal("0.5"), "saadhe": Decimal("0.5"), "paune": Decimal("-0.25")}
 _SCALE = {"sau": 100, "so": 100, "hazaar": 1000, "hazar": 1000, "hazzar": 1000, "lakh": 100_000, "lac": 100_000}
@@ -43,28 +46,35 @@ NUMBER_WORDS = set(_INT) | set(_HALF) | set(_MOD) | set(_SCALE)
 
 
 def _words_to_number(tokens: list[str]) -> Decimal | None:
-    """[<sawa|saade|paune>] [<int|dedh|dhai>] [<sau|hazaar|lakh>]. Leftover or unknown tokens -> None (never a wrong number)."""
+    """Sum of groups [<sawa|saade|paune>] [<int|dedh|dhai>] [<sau|hazaar|lakh>] with strictly falling scales
+    ("do sau pachaas"=250, "teen hazaar paanch sau"=3500). Leftover, unknown or out-of-order tokens -> None (never a wrong number)."""
     toks = list(tokens)
     if not toks:
         return None
-    mod = _MOD.get(toks[0])
-    if mod is not None:
-        toks.pop(0)
-    head: Decimal | None = None
-    if toks and toks[0] in _HALF:
-        head = _HALF[toks.pop(0)]
-    elif toks and toks[0] in _INT:
-        head = Decimal(_INT[toks.pop(0)])
-    if mod is not None:
-        head = (Decimal(1) if head is None else head) + mod  # "sawa teen"=3.25; "sawa sau" -> head 1.25 then ×100
-    scale = _SCALE.get(toks[0]) if toks else None
-    if scale is not None:
-        toks.pop(0)
-    if toks:  # anything left is unknown -> refuse
-        return None
-    if head is None:
-        return Decimal(scale) if scale is not None else None  # bare "sau" = 100
-    return head * scale if scale is not None else head
+    total, last_scale = Decimal(0), None
+    while toks:
+        start = len(toks)
+        mod = _MOD.get(toks[0])
+        if mod is not None:
+            toks.pop(0)
+        head: Decimal | None = None
+        if toks and toks[0] in _HALF:
+            head = _HALF[toks.pop(0)]
+        elif toks and toks[0] in _INT:
+            head = Decimal(_INT[toks.pop(0)])
+        if mod is not None:
+            head = (Decimal(1) if head is None else head) + mod  # "sawa teen"=3.25; "sawa sau" -> head 1.25 then ×100
+        scale = _SCALE.get(toks[0]) if toks else None
+        if scale is not None:
+            toks.pop(0)
+        if len(toks) == start:  # nothing consumed: unknown token -> refuse
+            return None
+        scale = scale or 1
+        if last_scale is not None and scale >= last_scale:  # "do teen", "sau hazaar" -> refuse
+            return None
+        total += (Decimal(1) if head is None else head) * scale  # bare "sau" = 100
+        last_scale = scale
+    return total
 
 
 def number(text: str) -> Decimal | None:
@@ -83,6 +93,7 @@ _UNIT_ALIASES = {
     "KG": ["kg", "kgs", "kilo", "kilos", "kilogram", "kilograms", "کلو", "کلوگرام"],
     "TON": ["ton", "tons", "tonne", "tonnes", "ٹن"],
     "BORI": ["bori", "boori", "bora", "boray", "borian", "bag", "bags", "بوری", "بوریاں"],
+    "CRATE": ["crate", "crates", "peti", "petian", "petiyan", "پیٹی"],  # file 03 §5: tomato crate weight varies, always ask
 }
 _UNIT_LOOKUP = {norm(a): u for u, aliases in _UNIT_ALIASES.items() for a in aliases}
 _UNIT_FACTOR_KG = {"MANN": Decimal(40), "KG": Decimal(1), "TON": Decimal(1000)}  # BORI/NONE have no fixed factor
@@ -95,10 +106,10 @@ def unit(text: str) -> str | None:
 
 class Quantity(NamedTuple):
     value: Decimal | None   # the number said (50, 1.5, 150 …), or None if only a unit was given
-    unit: str               # MANN / KG / TON / BORI / NONE  (NONE = a number with no unit)
-    value_kg: Decimal | None  # SPEC: value×40 / ×1 / ×1000; None for BORI and NONE
+    unit: str               # MANN / KG / TON / BORI / CRATE / NONE  (NONE = a number with no unit)
+    value_kg: Decimal | None  # SPEC: value×40 / ×1 / ×1000; None for BORI, CRATE and NONE
     ask: bool               # True when the caller must clarify before using it
-    reason: str | None      # "NO_UNIT" or "BAG_WEIGHT" when ask, else None
+    reason: str | None      # "NO_UNIT", "BAG_WEIGHT" or "CRATE_WEIGHT" when ask, else None
 
 
 def quantity(text: str, default_bag_kg: int | None = None) -> Quantity | None:
@@ -112,11 +123,14 @@ def quantity(text: str, default_bag_kg: int | None = None) -> Quantity | None:
     if m:  # a digit literal: keep its decimals (norm() would drop the '.'), take the unit from the rest
         value = Decimal(m.group())
         found = next((_UNIT_LOOKUP[t] for t in norm(s[: m.start()] + " " + s[m.end():]).split() if t in _UNIT_LOOKUP), None)
-    else:  # words only: split a unit token out, parse the rest as a number phrase
+    else:  # words only: the number is the longest phrase right before the unit ("pyaz ka dedh sau mann" -> 150)
         toks = norm(s).split()
         idx = next((i for i, t in enumerate(toks) if t in _UNIT_LOOKUP), None)
         found = _UNIT_LOOKUP[toks[idx]] if idx is not None else None
-        value = _words_to_number(toks[:idx] + toks[idx + 1:] if idx is not None else toks)
+        if idx is None:
+            value = _words_to_number(toks)
+        else:
+            value = next((v for j in range(idx) if (v := _words_to_number(toks[j:idx])) is not None), None)
 
     value = _tidy(value) if value is not None else None
     if found is None:
@@ -127,6 +141,8 @@ def quantity(text: str, default_bag_kg: int | None = None) -> Quantity | None:
         if default_bag_kg and value is not None:
             return Quantity(value, "BORI", _tidy(value * default_bag_kg), False, None)
         return Quantity(value, "BORI", None, True, "BAG_WEIGHT")
+    if found == "CRATE":
+        return Quantity(value, "CRATE", None, True, "CRATE_WEIGHT")
     kg = _tidy(value * _UNIT_FACTOR_KG[found]) if value is not None else None
     return Quantity(value, found, kg, False, None)
 
@@ -135,6 +151,7 @@ def quantity(text: str, default_bag_kg: int | None = None) -> Quantity | None:
 _TODAY = {norm(w) for w in ("aaj", "aj", "today", "آج")}
 _KAL = {norm(w) for w in ("kal", "کل")}
 _PARSON = {norm(w) for w in ("parson", "پرسوں")}
+_DAY_WORDS = {norm(w) for w in ("din", "dino", "dinon", "day", "days", "دن")}
 _NEXT_WEEK = [norm(p) for p in ("agle hafte", "aglay hafte", "agle haftay", "next week", "اگلے ہفتے")]
 _MONTHS = {
     1: ("january", "jan", "جنوری"), 2: ("february", "feb", "فروری"), 3: ("march", "mar", "مارچ"),
@@ -156,11 +173,22 @@ def _now_pkt(now: datetime | date | None) -> date:
 def horizon(text: str, now: datetime | date | None = None, future: bool | None = None) -> dict | None:
     """Date phrase -> a benchmark horizon dict, or None if there is no date token.
 
-    SPEC: aaj -> TODAY; agle hafte/next week -> DAYS h=7; a month name -> the next such month after `now`;
-    "kal"/"parson" need tense (`future=True` -> DAYS h=1/2) and are AMBIGUOUS on their own ("kal ka rate").
+    SPEC: aaj -> TODAY; agle hafte/next week -> DAYS h=7; "agle N din"/"next N days" -> DAYS h=N; tomorrow -> DAYS h=1;
+    a month name -> the next such month after `now`; "kal"/"parson" need tense (`future=True` -> DAYS h=1/2)
+    and are AMBIGUOUS on their own ("kal ka rate").
     """
     n = norm(text)
-    tokens = set(n.split())
+    toks = n.split()
+    tokens = set(toks)
+    for i, t in enumerate(toks):  # "agle 5 din", "next 3 days", "agle teen din" -> DAYS h=N (h > 7 kept as said; the gate decides)
+        if t in _DAY_WORDS:
+            v = next((v for j in (i - 2, i - 1) if j >= 0 and (v := number(" ".join(toks[j:i]))) is not None), None)
+            if v is not None and v >= 1 and v == v.to_integral_value():
+                return {"kind": "DAYS", "h": int(v)}
+    if "day after tomorrow" in n:
+        return {"kind": "DAYS", "h": 2}
+    if "tomorrow" in tokens:
+        return {"kind": "DAYS", "h": 1}
     if tokens & _TODAY:
         return {"kind": "TODAY"}
     if any(p and p in n for p in _NEXT_WEEK):

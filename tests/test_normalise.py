@@ -33,6 +33,10 @@ NUMBERS = [
     ("dedh", D("1.5")), ("derh", D("1.5")), ("dhai", D("2.5")), ("dedh sau", D(150)), ("dhai sau", D(250)),
     ("dhai hazaar", D(2500)), ("sawa teen", D("3.25")), ("saade char", D("4.5")), ("paune do", D("1.75")),
     ("sawa sau", D(125)), ("saade sau", D(150)), ("paune sau", D(75)),
+    # tens/teens and additive compounds (strictly falling scales)
+    ("pachees", D(25)), ("chalees", D(40)), ("pandrah", D(15)), ("do sau pachaas", D(250)), ("ek sau do", D(102)),
+    ("teen hazaar paanch sau", D(3500)), ("saadhe teen sau", D(350)), ("dedh lakh", D(150000)),
+    ("do teen", None), ("sau hazaar", None), ("teen rate", None),
     # not a number
     ("foo", None), ("rate", None), ("", None), ("mann", None), ("pyaz ka", None),
 ]
@@ -52,6 +56,7 @@ UNITS = [
     ("kg", "KG"), ("KGS", "KG"), ("kilo", "KG"), ("kilogram", "KG"), ("کلو", "KG"),
     ("ton", "TON"), ("tonne", "TON"), ("ٹن", "TON"),
     ("bori", "BORI"), ("bag", "BORI"), ("بوری", "BORI"),
+    ("crate", "CRATE"), ("peti", "CRATE"),
     ("xyz", None), ("pyaz", None), ("", None),
 ]
 
@@ -80,6 +85,13 @@ QUANTITIES = [
     ("bori", Quantity(None, "BORI", None, True, "BAG_WEIGHT")),
     ("50", Quantity(D(50), "NONE", None, True, "NO_UNIT")),
     ("teen", Quantity(D(3), "NONE", None, True, "NO_UNIT")),
+    # crate / peti -> always ask (file 03 §5)
+    ("10 crate", Quantity(D(10), "CRATE", None, True, "CRATE_WEIGHT")),
+    ("paanch peti", Quantity(D(5), "CRATE", None, True, "CRATE_WEIGHT")),
+    # number words beyond one group; extra words before the number are ignored
+    ("pachees mann", Quantity(D(25), "MANN", D(1000), False, None)),
+    ("do sau pachaas mann", Quantity(D(250), "MANN", D(10000), False, None)),
+    ("pyaz ka dedh sau mann", Quantity(D(150), "MANN", D(6000), False, None)),
     # unit only, no number
     ("mann", Quantity(None, "MANN", None, False, None)),
     # nothing quantity-like
@@ -128,6 +140,9 @@ HORIZONS = [
     ("april", None, _month("2027-04")), ("december", None, _month("2026-12")),
     ("january", None, _month("2027-01")), ("jan", None, _month("2027-01")), ("may", None, _month("2027-05")),
     ("مارچ", None, _month("2027-03")), ("جون", None, _month("2027-06")),
+    ("next 3 days", None, _days(3)), ("agle 5 din mein", None, _days(5)), ("agle teen din", None, _days(3)),
+    ("do din", None, _days(2)), ("tomorrow", None, _days(1)), ("day after tomorrow", None, _days(2)),
+    ("kitne din", None, None),
     ("kuch bhi", None, None), ("", None, None), ("pyaz ka rate", None, None),
 ]
 
