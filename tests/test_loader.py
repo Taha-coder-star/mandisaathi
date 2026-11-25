@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from app.migrate import migrate
-from mandi.ingest.loader import PKT, RawObs, exact_resolver, load, read_syn_csv, seed_reference, to_price_row
+from mandi.ingest.loader import PKT, RawObs, load, name_resolver, read_syn_csv, seed_reference, to_price_row
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = yaml.safe_load((ROOT / "data/synthetic/spec.yaml").read_text(encoding="utf-8"))
@@ -20,7 +20,7 @@ market_date,crop_id,mandi_raw,unit_raw,min_raw,max_raw,avg_raw,arrivals_qty,arri
 2026-11-20,ONION,Lahore,PKR/40kg,1200,1300.4,1250.508,12.50,tonne,2026-11-20 18:00+05:00
 2026-11-20,ONION,okara,PKR/100kg,2900.00,3100.00,3000.00,8.00,tonne,2026-11-21 18:00+05:00
 2026-11-20,TOMATO,SAHIWAL,PKR/100kg,,,5000.00,,,
-2026-11-20,POTATO,Lahor,PKR/100kg,3000.00,3200.00,3100.00,5.00,tonne,2026-11-20 18:00+05:00
+2026-11-20,POTATO,Hyderabad,PKR/100kg,3000.00,3200.00,3100.00,5.00,tonne,2026-11-20 18:00+05:00
 2026-11-20,POTATO,Okara,PKR/kg,30.00,32.00,31.00,5.00,tonne,2026-11-20 18:00+05:00
 """
 
@@ -70,7 +70,7 @@ def test_reader_keeps_raw_text_and_line_refs(tmp_path):
 def run(url, path, source="SYN"):
     with psycopg.connect(url, autocommit=True) as c:
         seed_reference(c, SPEC)
-        return load(c, source, read_syn_csv(path), "h" * 64, exact_resolver(c))
+        return load(c, source, read_syn_csv(path), "h" * 64, name_resolver(c))
 
 
 def price_rows(url):
@@ -87,7 +87,7 @@ def test_known_rows_load_exactly_and_reload_changes_nothing(db, tmp_path):
     f.write_text(CSV, encoding="utf-8")
     res = run(db, f)
     assert res.upserted == 3
-    assert res.unmatched == [("t.csv#L5", "Lahor")]  # spelling variant: task 4.2
+    assert res.unmatched == [("t.csv#L5", "Hyderabad")]  # not a mandi we know: refused, not guessed
     assert res.rejected == [("t.csv#L6", "unknown unit 'PKR/kg'")]
 
     first = price_rows(db)
@@ -125,7 +125,9 @@ def test_generated_file_loads_end_to_end(db, tmp_path):
     migrate(db)
     res = run(db, tmp_path / "syn.csv")
     assert res.rejected == []
-    assert len(res.unmatched) == sum(r["truth_variant"] == "1" for r in rows)  # exact matching only until 4.2
+    assert {raw for _, raw in res.unmatched} <= {"Ukara"}  # the one reviewed refusal (D-018)
     assert res.upserted == len(rows) - len(res.unmatched)
     with psycopg.connect(db) as c:
-        assert c.execute("SELECT count(*) FROM price_obs WHERE source = 'SYN'").fetchone()[0] == res.upserted
+        loaded = c.execute("SELECT raw_ref, mandi_id FROM price_obs WHERE source = 'SYN'").fetchall()
+    assert len(loaded) == res.upserted
+    assert all(mandi_id == rows[int(ref.split("#L")[1]) - 2]["truth_mandi_id"] for ref, mandi_id in loaded)  # line 2 = rows[0]
