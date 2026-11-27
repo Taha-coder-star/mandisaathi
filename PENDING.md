@@ -1,10 +1,10 @@
 # What is missing (open items)
 
 Last updated: Fri 27 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-035). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-036). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged.
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service code + tests (D-035), live check pending (below).
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done
@@ -47,7 +47,8 @@ end before the rest. Whether a volunteer number not on Meta's test-recipient lis
 ## 2. Other open items
 | Item | Needed by | What to do |
 |---|---|---|
-| 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003 and 004). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
+| 8.1 live check (D-035) | before 13.2 | Put `ELEVENLABS_API_KEY` + `GEMINI_API_KEY` in `.env` (format in `.env.example`). Send one real team note (6.4 V01): the turn must store a `message_log` row with a transcript (VM after deploy: migrate applies 005; or laptop against the local DB). First call also verifies Scribe v2 + `keyterms`, the auth header and the Gemini model id. Then recalibrate the silence levels on the real 6.4 silent/music controls; mark D-035 CONFIRMED. |
+| 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003, 004 and 005). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Proofread Urdu transcripts + benchmark gold | before 9.4 (Day 10) | Re-read `data/benchmark/text.jsonl` and `voice.jsonl` (single-annotated, D-020/D-030). |
 | G1: co-supervisor acknowledges the real-data request | Fri 4 Dec (task 10.2) | Request sent 23 Nov on WhatsApp; chase if no reply. |
 | Tomato yearly medians below envelope (D-024) | before G2 freeze | Review tomato base/envelope in `data/synthetic/spec.yaml`; re-run L2 (`tests/test_features.py`) and `make results` after any spec change. (SYN-NULL's drifting spreads: decided, kept as is, D-034.) |
