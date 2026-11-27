@@ -151,14 +151,22 @@ def test_forced_primary_error_uses_the_fallback(tmp_path, monkeypatch):  # DONE 
         ("scribe", "error", "HTTP 500"), ("gemini", "ok", None)]
 
 
-@pytest.mark.parametrize("bad,reason", [("", "empty"), ("   ", "empty"), ("rate rate rate rate", "repeat_loop"),
+@pytest.mark.parametrize("bad,reason", [("", "empty"), ("   ", "empty"),
+                                        (" ".join(["rate"] * 8), "repeat_loop"),  # a real STT loop, 8+ in a row
+                                        ("pyaz ka " * 8, "repeat_loop"),  # 16 words, 2 distinct
                                         ("这是 中文", "script"), (" ".join(["pyaz"] + ["ka"] * 30), "words_per_second")])
 def test_garbage_from_primary_falls_back(tmp_path, monkeypatch, bad, reason):
     p = Providers(monkeypatch, scribe=bad)
-    text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))
+    text, meta = speech.transcribe(ogg(tmp_path, _speechlike(30 if reason == "repeat_loop" else 4)))
     assert text == "pyaz ka rate lahore" and len(p.calls) == 2
     assert meta["attempts"][0] == {"provider": "scribe", "model": "scribe_v2", "outcome": "rejected", "reason": reason,
-                                   "ms": meta["attempts"][0]["ms"]}
+                                   "ms": meta["attempts"][0]["ms"], "text": bad.strip()[:200] or None}
+
+
+@pytest.mark.parametrize("said", ["Hello hello hello hello hello hello",  # live rows 7-10 (2026-11-28): a person testing the bot
+                                  "haan haan haan ji", "Okara Okara mandi mein pyaz ka rate"])
+def test_a_person_repeating_a_word_is_not_a_loop(said):
+    assert speech.sanity(said, 3.7) is None
 
 
 def test_unexpected_provider_exception_falls_back_and_never_raises(tmp_path, monkeypatch):
