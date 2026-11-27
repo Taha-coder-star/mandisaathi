@@ -345,4 +345,4 @@ Task 7.1 rule-based parser (`mandi/parse.py`, `scripts/score_parser.py`, `result
 - **Gold untouched (D-020 binding):** no benchmark line was edited; no parser disagreement pointed to a gold error. If one appears before the 9.4 freeze it is recorded here and raised with Taha, never silently fixed.
 - **Not in 7.1:** wiring into `handle_turn` (7.2 / 9.1), the LLM fallback (file 05 decision rule), reply text (9.1 renderer).
 - **Tests:** `tests/test_parser.py` — 24 cases: one per intent and per text-reachable outcome (GRACEFUL_FAIL is voice-control only), spans for alias / Urdu script / number words / Punjabi crop, the two-crop list, STOP, a fuzzy span, the alert-keeps-quantity-null guard, and a **regression floor** on the overall scores set just below the first measured numbers. Full suite **495 passed, 0 skipped** with Postgres; ruff clean.
-- DONE evidence: PR #PENDING CI run PENDING (secrets, test, image).
+- DONE evidence: PR #36 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45984731447 (secrets, test, image green); local 495 passed with Postgres, 0 skipped, ruff clean.
