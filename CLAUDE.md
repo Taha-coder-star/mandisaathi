@@ -43,6 +43,7 @@ plan3/            plan pack 3 (00–12), render.sh, make09.py
 docs/             SRS, SDS, FYP-I report drafts v1.0 (.docx/.pdf; need updating from the RFC:
                   tasks 16.4, 17.3, 18.1), fetch_policy.md, templates/ (university templates)
 DECISIONS.md      decision register
+PENDING.md        what is still missing (open items, how to finish them); update when an item closes
 mandi/            ingest/ features/ models/ decide/   (data + ML package)
 app/              WhatsApp webhook, worker, gateway, renderer
 params/           ps_v1.yaml (frozen at G2)
