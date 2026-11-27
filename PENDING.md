@@ -4,7 +4,7 @@ Last updated: Fri 27 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = 
 Decisions: `DECISIONS.md` (next free ID: D-036). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service code + tests (D-035), live check pending (below).
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035).
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done
@@ -47,7 +47,7 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 ## 2. Other open items
 | Item | Needed by | What to do |
 |---|---|---|
-| 8.1 live check (D-035) | now | Deployed 2026-11-27; DONE (a) transcript stored and (b) fallback PASSED live; real WhatsApp decode OK. **Left: DONE (c).** Silence rule recalibrated from the live notes (SILENT if < 2% of frames louder than −25 dBFS). Redeploy (`git pull && sudo docker compose up -d --build`), send one silent note (cover the mic, say nothing, 3–5 s): reply "Awaaz nahi aayi, dobara bhejein." and `jsonb_array_length(stt_meta->'attempts') = 0`. Then D-035 CONFIRMED. Later: re-check on the real 6.4 silent/music controls before G2 (`stt_meta` now holds the dBFS levels). **Quota:** every note to the bot spends Scribe free minutes (~12/month). |
+| Silence levels vs the real 6.4 controls (D-035) | before G2 (Day 10) | 8.1 is DONE. When the 6.4 silent (5 s, 20 s) and music controls go through the bot, check each `message_log` row: silent → `precheck` SILENT with 0 attempts, music → OK. `stt_meta` holds `active_ratio` and `p10/p50/p95/max_dbfs`; adjust `ACTIVE_DBFS`/`MIN_ACTIVE` in `app/speech.py` only if a control lands on the wrong side. **Quota:** every note to the bot spends Scribe free minutes (~12/month). |
 | 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003, 004 and 005). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Proofread Urdu transcripts + benchmark gold | before 9.4 (Day 10) | Re-read `data/benchmark/text.jsonl` and `voice.jsonl` (single-annotated, D-020/D-030). |
 | G1: co-supervisor acknowledges the real-data request | Fri 4 Dec (task 10.2) | Request sent 23 Nov on WhatsApp; chase if no reply. |
