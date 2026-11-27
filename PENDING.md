@@ -41,13 +41,13 @@ in `data/benchmark/speakers.csv` (no phone numbers). If phones don't match P1/P2
 **Rules:** never send STOP from a recording phone before its notes are pulled (STOP deletes the media IDs).
 If the speaker said something different from the line, edit `gold_transcript` (and gold) to what was said.
 
-**Unverified:** that Meta serves a voice note a second time after the bot downloaded it. Try ONE note (V01) end to
-end before the rest. Whether a volunteer number not on Meta's test-recipient list (max 5) still reaches the bot.
+**Verified 2026-11-27:** Meta serves a voice note a second time after the bot downloaded it (4 live notes re-downloaded by
+media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-recipient list (max 5) still reaches the bot.
 
 ## 2. Other open items
 | Item | Needed by | What to do |
 |---|---|---|
-| 8.1 live check (D-035) | now | Deployed 2026-11-27; DONE (a) transcript stored and (b) fallback PASSED live; real WhatsApp decode OK. **Left: DONE (c).** A finger-covered "silent" note passed the pre-check and reached Scribe. Fix: recalibrate the silence levels in `app/speech.py` from the live `active_ratio` values (`select id, stt_meta->>'active_ratio' from message_log`), merge, redeploy, send one silent note: reply "Awaaz nahi aayi, dobara bhejein." and `jsonb_array_length(stt_meta->'attempts') = 0`. Then D-035 CONFIRMED. Later: re-check on the real 6.4 silent/music controls before G2. **Quota:** every note to the bot now spends Scribe free minutes (~12/month). |
+| 8.1 live check (D-035) | now | Deployed 2026-11-27; DONE (a) transcript stored and (b) fallback PASSED live; real WhatsApp decode OK. **Left: DONE (c).** Silence rule recalibrated from the live notes (SILENT if < 2% of frames louder than −25 dBFS). Redeploy (`git pull && sudo docker compose up -d --build`), send one silent note (cover the mic, say nothing, 3–5 s): reply "Awaaz nahi aayi, dobara bhejein." and `jsonb_array_length(stt_meta->'attempts') = 0`. Then D-035 CONFIRMED. Later: re-check on the real 6.4 silent/music controls before G2 (`stt_meta` now holds the dBFS levels). **Quota:** every note to the bot spends Scribe free minutes (~12/month). |
 | 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003, 004 and 005). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Proofread Urdu transcripts + benchmark gold | before 9.4 (Day 10) | Re-read `data/benchmark/text.jsonl` and `voice.jsonl` (single-annotated, D-020/D-030). |
 | G1: co-supervisor acknowledges the real-data request | Fri 4 Dec (task 10.2) | Request sent 23 Nov on WhatsApp; chase if no reply. |
