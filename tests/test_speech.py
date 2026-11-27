@@ -42,6 +42,20 @@ def _music(s):
     return 0.2 * np.sin(2 * np.pi * 440 * t) + 0.1 * np.sin(2 * np.pi * 660 * t)
 
 
+def _covered_mic(s):
+    """Handling noise around -40 dBFS with a slow wobble, never loud: the live covered-mic note (D-035 row 2, max -23 dBFS)."""
+    t = np.arange(int(s * SR)) / SR
+    return rng.normal(0, _db(-40), len(t)) * (1 + 0.8 * np.sin(2 * np.pi * 0.7 * t))
+
+
+def _one_word(s):
+    """One 0.4 s word in an otherwise quiet note: the live row 3 shape (5.8% loud frames), which must stay OK."""
+    x = _floor(s)
+    i, n = int(2 * SR), int(0.4 * SR)
+    x[i:i + n] += _speechlike(0.4, level=-16)[:n]
+    return x
+
+
 def ogg(tmp_path, sig, name="note"):
     p = tmp_path / f"{name}.ogg"
     sf.write(p, np.asarray(sig, dtype="float32"), SR, format="OGG", subtype="OPUS")
@@ -79,8 +93,11 @@ class Providers:
 
 @pytest.mark.parametrize("sig,verdict", [
     (_floor(5), "SILENT"), (_floor(20), "SILENT"), (np.zeros(3 * SR), "SILENT"),  # the 6.4 silent controls (5 s, 20 s)
+    (_covered_mic(6), "SILENT"),  # C-SIL "cover the mic": hums but never gets loud
     (_speechlike(0.6), "TOO_SHORT"),
-    (_speechlike(4), "OK"), (_speechlike(4, level=-38), "OK"),  # a quiet speaker is not silence
+    (_speechlike(4), "OK"), (_one_word(6), "OK"),  # one short word in a long note is still speech
+    # trade-off (D-035): speech that never peaks above -25 dBFS counts as silence; live WhatsApp speech peaked at -6..-11
+    (_speechlike(4, level=-30), "SILENT"),
     (_music(5), "OK"),  # music goes to STT; the parser then finds no question (file 05 §6 step 5)
 ])
 def test_precheck_verdicts(tmp_path, sig, verdict):
