@@ -325,4 +325,5 @@ Task 6.4 voice benchmark: items, gold and pull tooling written before the record
 - **Consent enforced by test:** a recorded item fails `tests/test_benchmark_voice.py` unless its speaker row has a name (not TBD) and a `consent_date`.
 - **`.gitattributes`: `data/benchmark/*.jsonl eol=lf`** so Windows checkouts keep the byte-exact files (fixes the known local CRLF failure of `test_benchmark_texts`).
 - **Unverified:** that Meta serves an incoming media ID a second time after the worker's download (expected: media IDs live 30 days); the first pull tests it. Urdu-script transcripts and the new lines are single-annotated by me (as D-020): proofread before 9.4.
+- Tooling evidence: PR #33 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45963444910 (secrets, test, image green); local 471 passed with Postgres, 0 skipped.
 - DONE condition (file 11: 10 notes stored with gold) is **not met** by this PR: it needs S1 (V01–V04, V23, phone P1) and S5 (V15–V18, V29, phone P2) to record; S5's `consent_date` must be filled first. S2, S3, S4, S6 are still unnamed (deadline Day 9 for all 30).

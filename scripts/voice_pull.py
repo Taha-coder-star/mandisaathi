@@ -6,12 +6,12 @@
 Steps per note:
 1. On the item's phone, record the line INSIDE WhatsApp (hold the mic) and send it to the test number.
    The bot answers "Echo: voice note received (N bytes)": the webhook, queue and media download all worked.
-2. On the VM (browser terminal, ~/mandisaathi), list the media IDs of the voice notes, newest last:
-     sudo docker compose exec postgres psql -U mandi -d mandi -c "SELECT id, wa_ts,
+2. On the VM (browser terminal, ~/mandisaathi), list the media IDs of the voice notes, newest first:
+     sudo docker compose exec postgres psql -U mandi -d mandi -c "SELECT id, wa_ts, left(user_key, 8) AS sender,
        payload->'message'->'audio'->>'id' AS media_id FROM inbound_event
        WHERE payload->'message'->>'type' = 'audio' AND payload->'message'->'audio'->>'voice' = 'true'
        ORDER BY wa_ts DESC LIMIT 10"
-   (voice = 'true' keeps out forwarded audio files; only notes recorded in WhatsApp count.)
+   (voice = 'true' keeps out forwarded audio files; sender tells two phones apart. Try ONE note end to end first.)
 3. On the laptop, from the repo root (needs WA_TOKEN in .env): python scripts/voice_pull.py V01 <media_id>
    Downloads with app.gateway.download_media (fresh URL per media ID), checks it is an Ogg/Opus note, saves it,
    writes duration_s into voice.jsonl / controls.jsonl and the file's sha256 into manifest.csv (re-pull replaces).

@@ -91,8 +91,8 @@ only request comes after 120 s, so it is cut and must not be answered.
 ### 2.3a Recording and pulling (6.4, D-030)
 Items are written before recording: `duration_s` is `null` until the note is stored. `python scripts/voice_pull.py
 sheet [S1 ...]` prints who says what, on which phone and in which condition; `python scripts/voice_pull.py V01
-<media_id>` downloads the note sent to the test number (media ID from the VM's `inbound_event`, query in the
-script) through `app.gateway.download_media`, saves `audio/V01.ogg`, fills `duration_s` and `manifest.csv`.
+<media_id>` downloads the note sent to the test number (media ID and sender prefix from the VM's `inbound_event`,
+query in the script) through `app.gateway.download_media`, saves `audio/V01.ogg`, fills `duration_s` and `manifest.csv`.
 A speaker who departs from the line: edit `gold_transcript` (and gold, if the meaning changed) to what was said.
 
 ### 2.4 Multi-turn / command (`multiturn.jsonl`)

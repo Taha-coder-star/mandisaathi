@@ -1,2 +1,3 @@
 # Benchmark files are compared byte-for-byte (no BOM, no CR); keep LF on Windows checkouts too.
 data/benchmark/*.jsonl text eol=lf
+data/benchmark/*.csv text eol=lf
