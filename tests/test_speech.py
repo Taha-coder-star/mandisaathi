@@ -168,6 +168,19 @@ def test_truncation_write_failure_gives_up_without_stt(tmp_path, monkeypatch):
     assert text is None and p.calls == [] and meta["precheck"] == "UNREADABLE" and speech.reply(text, meta) == speech.FAILED_TEXT
 
 
+@pytest.mark.parametrize("label", ["[background noise]", "(music)", " [noise]  (silence) "])
+def test_a_sound_label_alone_is_empty_and_falls_back(tmp_path, monkeypatch, label):  # live check 2026-11-27, row 2
+    p = Providers(monkeypatch, scribe=label)
+    text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))
+    assert text == "pyaz ka rate lahore" and len(p.calls) == 2
+    assert (meta["attempts"][0]["outcome"], meta["attempts"][0]["reason"]) == ("rejected", "empty")
+
+
+def test_sound_labels_are_stripped_from_a_real_transcript(tmp_path, monkeypatch):
+    Providers(monkeypatch, scribe="[background noise] Okara mein pyaz ka rate (laughs)")
+    assert speech.transcribe(ogg(tmp_path, _speechlike(4)))[0] == "Okara mein pyaz ka rate"
+
+
 def test_both_fail_says_likh_kar_and_logs_an_error(tmp_path, monkeypatch, caplog):
     Providers(monkeypatch, scribe=speech.STTError("timeout"), gemini=speech.STTError("HTTP 429"))
     text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))
@@ -212,6 +225,7 @@ def test_scribe_request_shape(tmp_path, monkeypatch):
     assert req.full_url == speech.SCRIBE_URL and req.get_header("Xi-api-key") == "k-el" and timeout == 6.0
     body = req.data
     assert b'name="model_id"\r\n\r\nscribe_v2' in body and b'name="file"; filename="note.ogg"' in body
+    assert b'name="tag_audio_events"\r\n\r\nfalse' in body
     assert b'name="keyterms"\r\n\r\nOkara' in body and 'پیاز'.encode() in body
 
 
