@@ -22,6 +22,7 @@ import re
 from psycopg.types.json import Jsonb
 
 from app import crypto, gateway
+from mandi.parse import STOP_WORDS  # single source of truth for the stop keywords (task 7.1, handoff §3.2)
 
 log = logging.getLogger(__name__)
 
@@ -39,8 +40,6 @@ STOP_TEXT = (
     "Aap ka data mita diya gaya hai; ab koi paigham nahi aaye ga. Dobara shuru karne ke liye koi bhi paigham bhejein.\n"
     "Your data has been deleted and you will get no more messages. Send any message to start again."
 )
-STOP_WORDS = {"stop", "band karo", "بند کرو"}  # whole message only; benchmark T-EN-05, T-RU-12
-
 # Meta delivery states, in order; 'pending' (not yet sent) ranks 0 so the first 'sent' advances it. 'failed' is terminal.
 STATUS_RANK = {"pending": 0, "sent": 1, "delivered": 2, "read": 3}
 
