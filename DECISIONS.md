@@ -386,3 +386,4 @@ SYN-NULL keeps its per-mandi random walk; the drifting spreads found in D-033 ar
 - **Power check for 11.1:** drifting spreads push SYN-NULL's spread features outside their training range, which could in principle hide a leak. 11.1 therefore also runs a deliberately leaky model on SYN-NULL (e.g. one fed the realised target day); it must beat naive there, showing the false-skill check still has power. If it does not, the null is reopened before E3 is reported.
 - **Wording for the report and the jury:** "SYN-NULL lets each mandi follow its own random walk, so prices drift apart over the years. It tests that the model finds no false skill; it is not a realistic market."
 - The tomato envelope review (D-024) is a separate item and stays open.
+- Evidence: decision only (DECISIONS.md, PENDING.md). PR #39 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/46027252703 (secrets, test, image green).
