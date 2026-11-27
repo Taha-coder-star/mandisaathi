@@ -1,6 +1,8 @@
 """Leakage tests L1-L5 for the FS-S feature builder (task 6.3; file 04 §1.3, DECISIONS.md D-029). DB-free.
 
-Each test also runs a deliberately leaky variant and must catch it, so a pass means the check has power.
+L1, L3 and L5 also run a deliberately leaky variant and must catch it (so a pass means the check has power); L4's fixture
+carries the wrong rows (realised rain, older forecast, forecast issued on t) and checks they are ignored; L2 is a
+robustness check with no leak control.
 All inputs stop at the development end (2025-12-18): the holdout year is never read.
 """
 from datetime import date, datetime, timedelta

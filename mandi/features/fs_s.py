@@ -65,7 +65,11 @@ def spec_events(spec: dict) -> list[date]:
 
 
 def _panel(rows):
-    """Dense grids per series (crop, mandi) x calendar day: log mid P, log arrivals A, known-from day index K."""
+    """Dense grids per series (crop, mandi) x calendar day: log mid P, log arrivals A, known-from day index K.
+
+    shortcut: series = crop x mandi (file 04: x grade) and one source; two rows for one series-day raise. FYP-II graded
+    exports must add grade to the key or filter to one grade; callers filter on source (SYN and SYN-NULL would collide).
+    """
     obs = []
     for r in rows:
         if r.get("outlier_flag", "OK") != "OK" or (m := _mid(r)) is None or m <= 0:
