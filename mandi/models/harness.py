@@ -96,6 +96,17 @@ def ratio_ci(num, den, block: int = 10, n_boot: int = 2000, seed: int = 0, level
     return float(lo), float(hi)
 
 
+def predict_folds(model: Model, X, y, folds) -> list[np.ndarray]:
+    """Out-of-fold quantiles: for each fold, fit on its train rows and return the sorted (n_test, 3) q10/q50/q90 of its
+    test rows (same order as the fold's test index). E5 (12.2) reads these as the P10/P50 of a baseline or model."""
+    X, y = np.asarray(X, float), np.asarray(y, float)
+    out = []
+    for train, test in folds:
+        model.fit(X[train], y[train])
+        out.append(np.sort(np.asarray(model.predict(X[test]), float), axis=1))  # separately fitted quantiles can cross (D-010)
+    return out
+
+
 def evaluate(model: Model, X, y, dates, folds, block: int = 10, n_boot: int = 2000, seed: int = 0) -> dict:
     """Fit on each fold's train rows, score its test rows. Returns per-fold scores and the pooled score with a MASE CI.
 
@@ -104,9 +115,7 @@ def evaluate(model: Model, X, y, dates, folds, block: int = 10, n_boot: int = 20
     """
     X, y, dates = np.asarray(X, float), np.asarray(y, float), np.asarray(dates, dtype="datetime64[D]")
     per_fold, rows, preds = [], [], []
-    for train, test in folds:
-        model.fit(X[train], y[train])
-        q = np.sort(np.asarray(model.predict(X[test]), float), axis=1)  # separately fitted quantiles can cross (D-010)
+    for (_, test), q in zip(folds, predict_folds(model, X, y, folds), strict=True):
         per_fold.append(score(y[test], q, X[test, LAST]))
         rows.append(test)
         preds.append(q)
