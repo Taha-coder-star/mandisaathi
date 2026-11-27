@@ -62,7 +62,7 @@ def precheck(path: str) -> tuple[str, dict, np.ndarray | None, int]:
         if dur < MIN_S:
             return "TOO_SHORT", meta, None, 0
         data, sr = sf.read(path, frames=int(min(dur, MAX_S) * info.samplerate), dtype="float32", always_2d=True)
-    except (sf.LibsndfileError, RuntimeError, ValueError) as e:
+    except Exception as e:  # any decode failure: no STT call, and never raise to the worker (a retry would re-download)
         return "UNREADABLE", {"error": type(e).__name__}, None, 0
     mono = data.mean(axis=1)
     n = max(1, int(sr * FRAME_S))
@@ -163,7 +163,12 @@ def transcribe(path: str) -> tuple[str | None, dict]:
     if meta["duration_s"] > MAX_S:  # send only the decoded first 120 s; the reply says so
         fd, tmp = tempfile.mkstemp(prefix="wa-stt-", suffix=".ogg")
         os.close(fd)
-        sf.write(tmp, mono, sr, format="OGG", subtype="OPUS")
+        try:
+            sf.write(tmp, mono, sr, format="OGG", subtype="OPUS")
+        except Exception as e:  # e.g. a sample rate Opus does not take: give up without STT rather than raise
+            os.remove(tmp)
+            meta.update(precheck="UNREADABLE", error=f"truncate: {type(e).__name__}")
+            return None, meta
         send, meta["truncated"] = tmp, True
     heard_s = min(meta["duration_s"], MAX_S)
     model = os.environ.get("GEMINI_MODEL") or GEMINI_DEFAULT
@@ -179,8 +184,9 @@ def transcribe(path: str) -> tuple[str | None, dict]:
             t0 = time.monotonic()
             try:
                 text, extra = call(key)
-            except STTError as e:
-                attempt.update(outcome="error", error=str(e), ms=round((time.monotonic() - t0) * 1000))
+            except Exception as e:  # STTError, or an unexpected body shape: never raise (a re-run turn spends quota again)
+                err = str(e) if isinstance(e, STTError) else type(e).__name__
+                attempt.update(outcome="error", error=err, ms=round((time.monotonic() - t0) * 1000))
                 continue
             attempt["ms"] = round((time.monotonic() - t0) * 1000)
             if reason := sanity(text, heard_s):

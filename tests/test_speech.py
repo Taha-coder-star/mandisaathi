@@ -144,6 +144,30 @@ def test_garbage_from_primary_falls_back(tmp_path, monkeypatch, bad, reason):
                                    "ms": meta["attempts"][0]["ms"]}
 
 
+def test_unexpected_provider_exception_falls_back_and_never_raises(tmp_path, monkeypatch):
+    p = Providers(monkeypatch, scribe=KeyError("text"), gemini=TypeError("not a dict"))
+    text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))  # must not raise: the worker would re-run the turn
+    assert text is None and len(p.calls) == 2
+    assert [(a["outcome"], a["error"]) for a in meta["attempts"]] == [("error", "KeyError"), ("error", "TypeError")]
+
+
+def test_scribe_non_dict_body_is_an_error_not_a_crash(tmp_path, monkeypatch):
+    FakeHTTP(monkeypatch, ["unexpected"])
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
+    text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))
+    assert text is None and meta["attempts"][0]["outcome"] == "error"
+
+
+def test_truncation_write_failure_gives_up_without_stt(tmp_path, monkeypatch):
+    p = Providers(monkeypatch)
+    path = ogg(tmp_path, _speechlike(125))
+    def fail(*a, **k):
+        raise RuntimeError("bad sample rate")
+    monkeypatch.setattr(sf, "write", fail)
+    text, meta = speech.transcribe(path)
+    assert text is None and p.calls == [] and meta["precheck"] == "UNREADABLE" and speech.reply(text, meta) == speech.FAILED_TEXT
+
+
 def test_both_fail_says_likh_kar_and_logs_an_error(tmp_path, monkeypatch, caplog):
     Providers(monkeypatch, scribe=speech.STTError("timeout"), gemini=speech.STTError("HTTP 429"))
     text, meta = speech.transcribe(ogg(tmp_path, _speechlike(4)))
