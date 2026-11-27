@@ -17,6 +17,7 @@ TABLES = {
     "inbound_event", "job", "outbound_message",
     "wa_user", "query_state", "stop_tally",
     "query_patch_log", "answer_shown", "pending_clarification",
+    "message_log",
 }
 ALL = sorted(p.stem for p in MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"))
 

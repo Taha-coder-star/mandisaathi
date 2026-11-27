@@ -9,6 +9,7 @@ dependencies = [
     "pyyaml>=6",
     "numpy>=2",
     "cryptography>=43",  # task 5.1: Fernet encrypts the sending phone number (file 07 §3, D-021)
+    "soundfile>=0.12",  # task 8.1: Ogg Opus decode for the voice pre-checks; wheels bundle libsndfile (D-035)
 ]
 
 [project.optional-dependencies]

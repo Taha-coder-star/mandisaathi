@@ -7,6 +7,7 @@
   3. consent gate: first contact gets the consent + AI disclosure text, then the turn is answered (file 10 scenario 1);
   4. load query_state (reset after 30 days idle), apply the turn's patches, build the reply, save query_state (version + 1)
      with one query_patch_log row, once per turn job (app/state.py, task 7.2, D-032).
+Voice notes are transcribed inside the turn by app/speech.py (task 8.1, D-035) and logged in message_log.
 The reply is still an echo of the turn's messages and the patch list is still empty: connecting the parser (7.1) output
 as patches and the renderer (9.1) replace it.
 
@@ -24,7 +25,7 @@ from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
 
-from app import crypto, gateway
+from app import crypto, gateway, speech
 from app import state as qstate
 from mandi.parse import STOP_WORDS  # single source of truth for the stop keywords (task 7.1, handoff §3.2)
 
@@ -53,26 +54,41 @@ def _load_payload(conn, event_id: int) -> dict | None:
     return row[0] if row else None
 
 
-def _audio_echo(msg: dict) -> str:
-    """Download the voice note (task 5.2), report it, delete it: no STT until 8.1 and audio is never kept (OPS §3).
+def _voice(conn, user_key: str, msg: dict) -> str:
+    """Transcribe the voice note inside the turn (task 8.1, RFC §4; never its own job, file 09 R-02) and store it in message_log.
 
-    SendRetryable propagates so the worker retries the turn; a later attempt re-queries the media ID for a fresh URL.
+    A re-claimed turn finds the row by WAMID and reuses it: no second download, no second STT call (free-tier quota).
+    Download SendRetryable propagates so the worker retries the turn (no STT spent yet); STT failures never raise.
+    The audio file is deleted right after transcription (OPS §3).
     """
-    try:
-        path = gateway.download_media(msg["audio"]["id"])
-    except gateway.SendPermanent as e:
-        return f"Echo: voice note could not be downloaded ({e})"
-    try:
-        return f"Echo: voice note received ({os.path.getsize(path)} bytes)"
-    finally:
-        os.remove(path)
+    row = conn.execute("SELECT text_or_transcript, stt_meta FROM message_log WHERE wamid = %s", (msg["id"],)).fetchone()
+    if row:
+        text, meta = row
+    else:
+        try:
+            path = gateway.download_media(msg["audio"]["id"])
+        except gateway.SendPermanent as e:
+            log.error("voice %s: download failed (%s)", msg["id"], type(e).__name__)
+            text, meta = None, {"precheck": "DOWNLOAD_FAILED", "attempts": []}
+        else:
+            try:
+                text, meta = speech.transcribe(path)
+            finally:
+                os.remove(path)
+        conn.execute(
+            "INSERT INTO message_log (user_key, wamid, direction, modality, text_or_transcript, stt_meta)"
+            " VALUES (%s, %s, 'in', 'voice', %s, %s) ON CONFLICT (wamid) DO NOTHING",
+            (user_key, msg["id"], text, Jsonb(meta)),
+        )
+    out = speech.reply(text, meta)
+    return "Echo: " + out if text else out  # 9.1: the transcript goes to the parser instead of being echoed
 
 
-def _echo_body(msg: dict) -> str:
+def _echo_body(conn, user_key: str, msg: dict) -> str:
     if msg.get("type") == "text":
         return "Echo: " + msg["text"]["body"]
     if msg.get("type") == "audio":
-        return _audio_echo(msg)
+        return _voice(conn, user_key, msg)
     return f"Echo: received a {msg.get('type', '?')} message"
 
 
@@ -136,7 +152,7 @@ def _forget(conn, job) -> None:
         conn.execute("UPDATE job SET user_key = NULL, payload = '{}' WHERE id = %s", (job.id,))  # the running job itself
         conn.execute("DELETE FROM inbound_event WHERE user_key = %s", (u,))  # payloads hold from_enc
         conn.execute("DELETE FROM wa_user WHERE user_key = %s", (u,))
-        # ^ cascades to query_state, query_patch_log, answer_shown, pending_clarification
+        # ^ cascades to query_state, query_patch_log, answer_shown, pending_clarification, message_log
     log.info("turn job %s: STOP, farmer data deleted", job.id)
 
 
@@ -183,7 +199,8 @@ def handle_turn(conn, job):
     now = datetime.now(UTC)
     patches: list[dict] = []  # parser output → patches is wired with 9.1/10.x; until then the state round-trips unchanged
     state = qstate.apply(qstate.load(conn, u, now), patches, "text", now)
-    _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(m) for m in msgs))  # 9.1: render from state + tool payload
+    # voice notes are transcribed here, after STOP and the consent row (message_log references wa_user), in wa_ts order
+    _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(conn, u, m) for m in msgs))  # 9.1: render from state + tool payload
     qstate.save(conn, u, state, patches, msgs[-1].get("id"), job.id)  # version + 1 and one query_patch_log row
     conn.execute(
         "UPDATE wa_user SET last_inbound_at = GREATEST(last_inbound_at,"

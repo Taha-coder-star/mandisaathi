@@ -11,7 +11,7 @@ import pytest
 from cryptography.fernet import Fernet
 from psycopg.types.json import Jsonb
 
-from app import crypto, gateway, handlers
+from app import crypto, gateway, handlers, speech
 from app import state as qstate
 from app.migrate import migrate
 from app.worker import Job, run_one
@@ -101,12 +101,12 @@ def test_non_text_message_echoes_a_note(conn, gw):
     assert gw.sends == [(NUMBER, "Echo: received a image message")]
 
 
-def test_voice_note_is_downloaded_reported_and_deleted(conn, gw, monkeypatch, tmp_path):
+def test_voice_note_is_downloaded_checked_and_deleted(conn, gw, monkeypatch, tmp_path):
     f = tmp_path / "note.ogg"
-    f.write_bytes(b"x" * 42)
+    f.write_bytes(b"x" * 42)  # not audio: the 8.1 pre-check stops it before any STT call (tests/test_speech.py has the rest)
     monkeypatch.setattr(gateway, "download_media", lambda mid: str(f) if mid == "MEDIA1" else None)
     handlers.handle_turn(conn, seed_turn(conn, mtype="audio"))
-    assert gw.sends == [(NUMBER, "Echo: voice note received (42 bytes)")]
+    assert gw.sends == [(NUMBER, speech.FAILED_TEXT)]
     assert not f.exists()  # audio is never kept (OPS §3)
 
 
@@ -212,7 +212,8 @@ def test_mark_read_failure_does_not_stop_the_reply(conn, monkeypatch):
 # --- orchestrator skeleton (task 6.2 DONE: consent, burst = 1 turn, STOP deletes) ---------------------------------------
 
 FARMER_TABLES = ("wa_user", "query_state", "inbound_event", "outbound_message", "job",
-                 "query_patch_log", "answer_shown", "pending_clarification")  # the last three: task 7.2, migration 004
+                 "query_patch_log", "answer_shown", "pending_clarification",  # task 7.2, migration 004
+                 "message_log")  # task 8.1, migration 005
 
 
 def count_for(conn, user):
