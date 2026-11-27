@@ -1,10 +1,10 @@
 # What is missing (open items)
 
 Last updated: Fri 27 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-033). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-034). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032) merged.
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged.
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done
@@ -50,9 +50,10 @@ end before the rest. Whether a volunteer number not on Meta's test-recipient lis
 | 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003 and 004). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Proofread Urdu transcripts + benchmark gold | before 9.4 (Day 10) | Re-read `data/benchmark/text.jsonl` and `voice.jsonl` (single-annotated, D-020/D-030). |
 | G1: co-supervisor acknowledges the real-data request | Fri 4 Dec (task 10.2) | Request sent 23 Nov on WhatsApp; chase if no reply. |
-| Tomato yearly medians below envelope (D-024) | before G2 freeze | Review tomato base/envelope in `data/synthetic/spec.yaml`; re-run L2 (`tests/test_features.py`) after any spec change. |
+| Tomato yearly medians below envelope (D-024) | before G2 freeze | Review tomato base/envelope in `data/synthetic/spec.yaml`; re-run L2 (`tests/test_features.py`) and `make results` after any spec change. Also review SYN-NULL's per-mandi random walk (mandis drift ~2.7× apart by 2025, D-033). |
 | AWS credit end date (D-009) | — | Check Billing → Credits; fallback Oracle Always-Free. |
 | D-002 user-agent contact email | FYP-II only | Choose before any AMIS fetching. |
 
 ## 3. Next plan tasks (critical path)
-Day 7: **7.3** baselines E2 (needs 6.3 + 3.4). Then Day 8 onward per file 11. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
+Day 8 onward per file 11.
+7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 completes `params/ps_v1.yaml` around the DRAFT `f1_eval` block; rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.

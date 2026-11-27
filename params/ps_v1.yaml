@@ -1,0 +1,17 @@
+# ps_v1 parameter set. DRAFT: task 8.3 writes the rest (thresholds, costs, S1-S5, valid-null wording);
+# FROZEN at gate G2 (task 10.3, git tag ps_v1). After the tag, no edit; results are regenerated with `make results`.
+
+f1_eval:
+  # Task 7.3 (D-033): development folds shared by E2 (baselines), E3 (11.1, LightGBM) and E5 (12.2, F2 backtest).
+  # File 04 §1.4: rolling origin, train before the fold, test the next 3 months, roll by 3 months, >= 6 folds.
+  folds:
+    first_test: "2024-06"   # latest start that fits 6 folds before the dev end 2025-12-18 (last test day 2025-11-30)
+    n_folds: 6
+    test_months: 3
+    step_months: 3
+    embargo: h              # train issue day < test start - h: a late-published target (known t+h+1) is known by then
+  bootstrap: {block_days: 10, n_boot: 2000, seed: 0}   # D-016 circular block bootstrap of the pooled MASE ratio
+  horizons: [1, 2, 3, 4, 5, 6, 7]
+  # Sanity rule written before the first E2 run (D-033). SYN-NULL is a pure random walk (D-014), where LAST is the best
+  # point forecast: no baseline may show skill there. Fail -> leakage/bug hunt before any number is reported.
+  sanity: {variant: SYN-NULL, rule: "no baseline x crop x h has mase_hi < 1"}

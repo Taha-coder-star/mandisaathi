@@ -28,6 +28,7 @@ PERISH = {"LOW": 0, "MED": 1, "HIGH": 2}
 FEATURES = ["last", "age", "ret1", "ret7", "dev7", "dev28", "vol28", "spread_region", "spread_near3", "arrivals_dev",
             "weekday", "doy", "days_to_event", "crop", "mandi", "perish"]  # column 0 = harness LAST (PKR/100 kg)
 XY_COLUMNS = [*FEATURES, "h"]
+SAME_WEEKDAY = ["same_weekday", "same_weekday_lag"]  # B-SN input (task 7.3, D-033); not in the default X
 NEVER = 1 << 40  # known-from index of an empty cell
 
 
@@ -175,11 +176,36 @@ def feature_table(rows, events=(), last_day: date | None = None, gaz: dict | Non
     return keys, np.datetime64(d0) + t.astype("timedelta64[D]"), _features(keys, d0, P, A, K, t, events, gaz or read())
 
 
-def make_xy(rows, horizons=range(1, 8), events=(), gaz: dict | None = None):
+def xy_columns(same_weekday: bool = False) -> list[str]:
+    """Column names of make_xy's X; the opt-in B-SN inputs sit just before h, so h stays X[:, -1]."""
+    return [*FEATURES, *SAME_WEEKDAY, "h"] if same_weekday else XY_COLUMNS
+
+
+
+def _same_weekday(P, K, t, h):
+    """(S, T, 2): newest mid known at t on market date t+h-8 (same weekday as the target, one week earlier) or, if that
+    cell is missing / not yet known, on the newest earlier day within WINDOW; plus its lag in days (8-h = exact).
+    NaN when nothing qualifies (the B-SN baseline then falls back to LAST). Only cells with K <= t are read (T1)."""
+    k = 7 - h  # w[:, k] holds lag k + 1 = 8 - h
+    out = np.full((P.shape[0], len(t), 2), np.nan)
+    for s in range(P.shape[0]):
+        w = _asof(P, K, s, t, np.arange(1, WINDOW + 1))[:, k:]
+        has = ~np.isnan(w)
+        first = has.argmax(axis=1)
+        any_ = has.any(axis=1)
+        out[s, any_, 0] = np.exp(w[any_, first[any_]])
+        out[s, any_, 1] = first[any_] + k + 1
+    return out
+
+
+def make_xy(rows, horizons=range(1, 8), events=(), gaz: dict | None = None, same_weekday: bool = False):
     """Harness rows (mandi.models.harness convention): X = XY_COLUMNS (col 0 = LAST), y = mid on market date t+h-1,
     dates = issue day t. Rows without a known LAST or without a target quote are dropped; other NaN features stay
     (LightGBM takes NaN; filter them for learners that don't). Pooled across horizons: filter by X[:, -1] == h.
+    same_weekday=True adds the B-SN columns SAME_WEEKDAY before h (h <= 7 only); the default X is unchanged.
     """
+    if same_weekday and max(horizons) > 7:
+        raise ValueError("same_weekday needs h <= 7 (the same weekday last week must lie before the issue day)")
     keys, d0, P, A, K = _panel(rows)
     t = np.arange(1, P.shape[1])
     F = _features(keys, d0, P, A, K, t, events, gaz or read())
@@ -191,7 +217,8 @@ def make_xy(rows, horizons=range(1, 8), events=(), gaz: dict | None = None):
         y = np.full((len(keys), len(t)), np.nan)
         y[:, ok] = np.exp(P[:, tgt[ok]])
         keep = ~np.isnan(y) & ~np.isnan(F[:, :, 0])
-        X.append(np.column_stack([F[keep], np.full(keep.sum(), h)]))
+        extra = [_same_weekday(P, K, t, h)[keep]] if same_weekday else []
+        X.append(np.column_stack([F[keep], *extra, np.full(keep.sum(), h)]))
         Y.append(y[keep])
         D.append(np.broadcast_to(days, keep.shape)[keep])
     return np.concatenate(X), np.concatenate(Y), np.concatenate(D)

@@ -11,9 +11,7 @@ import numpy as np
 import pytest
 
 from mandi.features import fs_s
-from mandi.ingest import qc
-from mandi.ingest.loader import TO_PER_100KG
-from mandi.models import harness
+from mandi.models import devdata, harness
 from mandi.models.planted import LeadLearner
 from scripts.make_synthetic import generate, load_spec
 
@@ -25,18 +23,7 @@ COL = {f: i for i, f in enumerate(fs_s.XY_COLUMNS)}
 
 def syn_rows(variant="SYN", crops=("ONION", "TOMATO", "POTATO"), end=DEV_END):
     """Generator rows as price_obs rows: canonical units (loader rule), outlier_flag from QC, dev period only."""
-    out = []
-    for r in generate(SPEC, variant):
-        d = date.fromisoformat(r["market_date"])
-        if d > end or r["crop_id"] not in crops:
-            continue
-        f = float(TO_PER_100KG[r["unit_raw"]])
-        out.append({"crop_id": r["crop_id"], "mandi_id": r["truth_mandi_id"], "market_date": d,
-                    "reported_at": datetime.fromisoformat(r["reported_at"]), "arrivals_qty": float(r["arrivals_qty"]),
-                    "late": r["truth_late"] == "1", **{f"{k}_pkr100kg": float(r[f"{k}_raw"]) * f for k in ("min", "max", "avg")}})
-    for r, why in zip(out, qc.flag(out), strict=True):
-        r["outlier_flag"] = "SUSPECT" if why else "OK"
-    return out
+    return devdata.price_rows(generate(SPEC, variant), end, crops)
 
 
 @pytest.fixture(scope="module")
