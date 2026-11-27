@@ -5,8 +5,10 @@
      the other turn jobs of the same burst then find nothing and finish silently;
   2. STOP / "band karo" anywhere in the turn: confirm, then delete the farmer's rows, keeping only an anonymous count;
   3. consent gate: first contact gets the consent + AI disclosure text, then the turn is answered (file 10 scenario 1);
-  4. load query_state, build the reply, save query_state (version + 1).
-The reply is still an echo of the turn's messages: the parser (7.1), state patches (7.2) and renderer (9.1) replace it.
+  4. load query_state (reset after 30 days idle), apply the turn's patches, build the reply, save query_state (version + 1)
+     with one query_patch_log row, once per turn job (app/state.py, task 7.2, D-032).
+The reply is still an echo of the turn's messages and the patch list is still empty: connecting the parser (7.1) output
+as patches and the renderer (9.1) replace it.
 
 `handle_status` advances the matching outbound_message as Meta reports sent → delivered → read (forward-only; never
 regresses, never moves past a terminal 'failed').
@@ -18,10 +20,12 @@ ambiguous outcome leaves the row 'pending' and is never resent. Choices: DECISIO
 import logging
 import os
 import re
+from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
 
 from app import crypto, gateway
+from app import state as qstate
 from mandi.parse import STOP_WORDS  # single source of truth for the stop keywords (task 7.1, handoff §3.2)
 
 log = logging.getLogger(__name__)
@@ -131,7 +135,8 @@ def _forget(conn, job) -> None:
         conn.execute("DELETE FROM job WHERE user_key = %s AND id <> %s", (u, job.id))
         conn.execute("UPDATE job SET user_key = NULL, payload = '{}' WHERE id = %s", (job.id,))  # the running job itself
         conn.execute("DELETE FROM inbound_event WHERE user_key = %s", (u,))  # payloads hold from_enc
-        conn.execute("DELETE FROM wa_user WHERE user_key = %s", (u,))  # cascades to query_state
+        conn.execute("DELETE FROM wa_user WHERE user_key = %s", (u,))
+        # ^ cascades to query_state, query_patch_log, answer_shown, pending_clarification
     log.info("turn job %s: STOP, farmer data deleted", job.id)
 
 
@@ -175,12 +180,11 @@ def handle_turn(conn, job):
         _send(conn, job, CONSENT_SEQ, to, CONSENT_TEXT)
         conn.execute("INSERT INTO wa_user (user_key, consent_at) VALUES (%s, now()) ON CONFLICT DO NOTHING", (u,))
 
-    conn.execute("INSERT INTO query_state (user_key) VALUES (%s) ON CONFLICT DO NOTHING", (u,))
-    state = conn.execute("SELECT state FROM query_state WHERE user_key = %s", (u,)).fetchone()[0]
-    _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(m) for m in msgs))  # 7.1/7.2/9.1: parse, patch state, render
-    conn.execute(
-        "UPDATE query_state SET state = %s, version = version + 1, updated_at = now() WHERE user_key = %s", (Jsonb(state), u)
-    )
+    now = datetime.now(UTC)
+    patches: list[dict] = []  # parser output → patches is wired with 9.1/10.x; until then the state round-trips unchanged
+    state = qstate.apply(qstate.load(conn, u, now), patches, "text", now)
+    _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(m) for m in msgs))  # 9.1: render from state + tool payload
+    qstate.save(conn, u, state, patches, msgs[-1].get("id"), job.id)  # version + 1 and one query_patch_log row
     conn.execute(
         "UPDATE wa_user SET last_inbound_at = GREATEST(last_inbound_at,"
         " (SELECT max(wa_ts) FROM inbound_event WHERE turn_job_id = %s)) WHERE user_key = %s",

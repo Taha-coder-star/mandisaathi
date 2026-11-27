@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from psycopg.types.json import Jsonb
 
 from app import crypto, gateway, handlers
+from app import state as qstate
 from app.migrate import migrate
 from app.worker import Job, run_one
 
@@ -125,6 +126,42 @@ def test_rerun_does_not_resend(conn, gw):
     handlers.handle_turn(conn, job)  # a re-claim after the lease, say
     assert len(gw.sends) == 1
     assert outbound(conn, job.id)[0] == "sent"
+    # ...and the state is saved once: version 1, one patch-log row (task 7.2)
+    assert conn.execute("SELECT version FROM query_state WHERE user_key = 'US.F'").fetchone() == (1,)
+    assert conn.execute("SELECT version, turn_job_id FROM query_patch_log WHERE user_key = 'US.F'").fetchall() == [(1, job.id)]
+
+
+# --- query state (task 7.2) -------------------------------------------------------------------------------------------
+
+def test_each_turn_writes_one_patch_log_row_and_bumps_the_version(conn, gw):
+    jobs = []
+    for text in ("pyaz ka rate", "aur tamatar?"):
+        jobs.append(seed_turn(conn, text))
+        handlers.handle_turn(conn, jobs[-1])
+    rows = conn.execute(
+        "SELECT version, patch, message_id, turn_job_id FROM query_patch_log WHERE user_key = 'US.F' ORDER BY id"
+    ).fetchall()
+    assert [(v, p, j) for v, p, _, j in rows] == [(1, [], jobs[0].id), (2, [], jobs[1].id)]  # no patches until 9.1/10.x
+    assert all(m.startswith("wamid.IN") for _, _, m, _ in rows)
+    assert conn.execute("SELECT state, version FROM query_state WHERE user_key = 'US.F'").fetchone() == ({}, 2)
+
+
+def test_state_idle_over_30_days_is_reset_on_load(conn, gw):
+    conn.execute("INSERT INTO wa_user (user_key, consent_at) VALUES ('US.F', now())")
+    conn.execute("INSERT INTO query_state (user_key, state, version, updated_at) VALUES ('US.F', %s, 4, now() - interval '31 days')",
+                 (Jsonb({"crop": {"value": "ONION"}}),))
+    qstate.open_clarification(conn, "US.F", "place", [], None, datetime.now(UTC) - timedelta(days=31))
+    handlers.handle_turn(conn, seed_turn(conn))
+    assert conn.execute("SELECT state, version FROM query_state WHERE user_key = 'US.F'").fetchone() == ({}, 5)
+    assert conn.execute("SELECT count(*) FROM pending_clarification").fetchone() == (0,)
+
+
+def test_recent_state_is_kept_on_load(conn, gw):
+    conn.execute("INSERT INTO wa_user (user_key, consent_at) VALUES ('US.F', now())")
+    conn.execute("INSERT INTO query_state (user_key, state, updated_at) VALUES ('US.F', %s, now() - interval '29 days')",
+                 (Jsonb({"crop": {"value": "ONION"}}),))
+    handlers.handle_turn(conn, seed_turn(conn))
+    assert conn.execute("SELECT state FROM query_state WHERE user_key = 'US.F'").fetchone() == ({"crop": {"value": "ONION"}},)
 
 
 def test_no_from_enc_is_a_noop(conn, gw):
@@ -174,7 +211,8 @@ def test_mark_read_failure_does_not_stop_the_reply(conn, monkeypatch):
 
 # --- orchestrator skeleton (task 6.2 DONE: consent, burst = 1 turn, STOP deletes) ---------------------------------------
 
-FARMER_TABLES = ("wa_user", "query_state", "inbound_event", "outbound_message", "job")
+FARMER_TABLES = ("wa_user", "query_state", "inbound_event", "outbound_message", "job",
+                 "query_patch_log", "answer_shown", "pending_clarification")  # the last three: task 7.2, migration 004
 
 
 def count_for(conn, user):
@@ -204,8 +242,12 @@ def test_burst_of_three_pending_messages_is_one_turn(conn, gw):
 
 
 def test_stop_confirms_and_deletes_the_farmer(conn, gw):
-    handlers.handle_turn(conn, seed_turn(conn, user="US.GONE", consented=False))  # consent + reply, state saved
+    handlers.handle_turn(conn, seed_turn(conn, user="US.GONE", consented=False))  # consent + reply, state + patch log saved
+    now = datetime.now(UTC)  # rows the echo turn cannot write yet (7.2 tables), so STOP is proven to delete them too
+    qstate.record_answer(conn, "US.GONE", "F2", "run-1", ["LAHORE", "OKARA"], "wamid.ANS", now)
+    qstate.open_clarification(conn, "US.GONE", "place", ["OKARA", "LAHORE"], "wamid.Q", now)
     insert_outbound(conn, wamid="wamid.OTHER", user="US.OTHER")  # another farmer's data must survive
+    assert all(count_for(conn, "US.GONE")[t] > 0 for t in ("query_patch_log", "answer_shown", "pending_clarification"))
     job = seed_turn(conn, "STOP!", user="US.GONE", consented=False)
     handlers.handle_turn(conn, job)
     assert gw.sends[-1] == (NUMBER, handlers.STOP_TEXT)
