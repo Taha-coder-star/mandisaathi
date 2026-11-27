@@ -79,15 +79,20 @@ def readme(table: list[dict], cfg: dict, spec: dict, fails: list[dict]) -> str:
             cov.append([h] + [f"{c[b]['coverage']:.3f}" for b in ("B-N", "B-SN", "B-SR")] + [c["B-N"]["n"]])
         out += [md_table(["h", "B-N", "B-SN", "B-SR", "test rows"], cov), ""]
     null = [r for r in table if r["variant"] == "SYN-NULL"]
+    others = [r for r in table if r["baseline"] != "B-N"]
+    wins = [f"{r['variant']} {r['crop']} h={r['h']} {r['baseline']}" for r in others if r["mase_hi"] < 1]
+    sr = {v: [r for r in table if r["variant"] == v and r["baseline"] == "B-SR"] for v in VARIANTS}
+    sr_all = {v: [r for r in sr[v] if r["crop"] == f1eval.ALL] for v in VARIANTS}
     out += ["## Reading the numbers", "",
-            "- B-N is the bar: neither other baseline beats it on any crop or horizon, on SYN or SYN-NULL. E3 (11.1) must beat "
-            "B-N, not these.",
-            "- B-SN loses most at h = 1 (it uses a quote up to a week older than M(t-1)) and converges to B-N as h -> 7.",
-            "- B-SR pulls every mandi halfway to the crop median, but the generator gives each mandi a fixed premium (spec "
-            "`mandi_effect`), so the median is not where prices go back to. On SYN-NULL each mandi also has its own random "
-            "walk (D-014), so spreads drift apart over the years and halving them costs most (MASE about 6-16).",
-            "- B-SR ranges come from training residuals; on SYN-NULL the spreads keep growing after training, so coverage "
-            "falls to about 64%.", ""]
+            "- " + ("B-N is the bar: no other baseline beats it (MASE upper bound < 1) on any variant, crop or horizon. "
+                    "E3 (11.1) must beat B-N." if not wins
+                    else "Baselines that beat B-N (MASE upper bound < 1): " + ", ".join(wins) + "."),
+            "- B-SN uses a quote up to a week older than M(t-1) at h = 1 and the same quote as B-N at h = 7.",
+            "- B-SR pulls every mandi halfway to the crop median, while the generator gives each mandi a fixed premium (spec "
+            "`mandi_effect`); on SYN-NULL each mandi also has its own random walk (D-014), so spreads drift apart over the years. "
+            + "; ".join(f"{v}: B-SR MASE {min(r['mase'] for r in sr[v]):.2f}-{max(r['mase'] for r in sr[v]):.2f} over crops x h, "
+                        f"ALL-crops coverage {min(r['coverage'] for r in sr_all[v]):.3f}-{max(r['coverage'] for r in sr_all[v]):.3f}"
+                        for v in VARIANTS) + ".", ""]
     out += ["## Sanity rule (pre-registered, D-033)", "",
             f"Rule: on SYN-NULL {cfg['sanity']['rule']}. Checked {len(null)} rows: "
             + ("**PASS**." if not fails else f"**FAIL** in {len(fails)} rows; leakage/bug hunt before any number is used."), ""]
