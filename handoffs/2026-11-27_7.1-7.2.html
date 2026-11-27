@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Handoff 7.1 7.2</title>
+<link rel="stylesheet" href="../plan3/src/style.css">
+<style>body { font-size: 9pt; } table { font-size: 8.1pt; margin: 4pt 0 7pt; } h2 { margin-top: 11pt; } h3 { margin-top: 8pt; }
+code { font-size: 8pt; } pre { font-size: 7.8pt; background: #f6f7f9; padding: 5pt 7pt; border-radius: 3pt; white-space: pre-wrap; }
+td, th { vertical-align: top; }</style></head>
+<body>
+<h1>Handoff: tasks 7.1 + 7.2 (rule parser, query state manager)</h1>
+<div class="sub">MandiSaathi FYP-I · state of the project after Day 6 (6.1–6.4) and exact instructions for the next developer</div>
+<div class="meta">Date: Fri 27 Nov 2026 · From: Taha · To: next developer · Plan: <code>plan3/pdf/11_Execution_Plan.pdf</code> (Day 1 = Mon 23 Nov, Mon–Fri) · Day 7 = Tue 1 Dec · Gate affected: M2 (via 7.1/7.2 → 9.x) · Repo: <code>github.com/Taha-coder-star/mandisaathi</code>, main at <code>dd065fb</code> · No secrets in this document: values live in <code>.env</code> only</div>
+
+<div class="warn"><b>In one line:</b> Days 1–6 are built and merged with CI green, and gate M1 passed. The open items are the voice recordings for 6.4 (they need people), the 6.2 live check on the VM, and proofreading. Next are <b>7.1</b> (the rule parser, a pure library scored on the benchmark) and <b>7.2</b> (the state manager: patches, answer positions, clarification, expiry, plus one migration). Both are CRIT. 7.3 (baselines) is a separate CRIT task on Day 7.</div>
+
+<h2>1. Status at a glance (all merged to main, CI green unless marked)</h2>
+<table>
+<thead><tr><th>Task</th><th>What it delivered</th><th>Status</th><th>Evidence</th></tr></thead>
+<tr><td>1.1–1.3</td><td>Meta test WhatsApp account + number, permanent system-user token, 4 templates (price_alert UTILITY, daily_rates MARKETING; en + ur)</td><td><span class="tag v">DONE</span></td><td>D-004, D-005 (all 4 APPROVED 25 Nov); <code>scripts/check_token.py</code></td></tr>
+<tr><td>1.4–1.7</td><td>Repo layout, one Docker image with web/worker/batch roles, CI (secrets/test/image); A1 decisions; benchmark SPEC; literature review draft</td><td><span class="tag v">DONE</span></td><td>D-006–D-008; PR #1–#4; <code>data/benchmark/SPEC.md</code>, <code>docs/lit_review.md</code> (rows still draft)</td></tr>
+<tr><td>2.1–2.5</td><td>EC2 VM (Caddy, web, worker, Postgres, /health), webhook verify + signature, schema v1 + migrator, synthetic spec (supervisor reviewed), lockbox seal script</td><td><span class="tag v">DONE</span></td><td>D-009–D-012; PR #5–#10; <code>https://3-13-120-80.sslip.io/health</code></td></tr>
+<tr><td>3.1–3.4</td><td>Idempotent ingest (1 event + 1 job per WAMID), synthetic generator SYN/SYN-NULL, loader + export contract, evaluation harness (rolling folds, MASE, bootstrap, L6)</td><td><span class="tag v">DONE</span></td><td>D-013–D-016; <code>tests/test_ingest.py</code>, <code>test_make_synthetic.py</code>, <code>test_harness.py</code>; PR #11–#14</td></tr>
+<tr><td>4.1–4.4</td><td>Worker (SKIP LOCKED + per-farmer advisory lock, backoff, dead-letter), ingest name matching, gazetteer (6 crops, 15 mandis, 7 non-Punjab places), 40 benchmark texts with gold</td><td><span class="tag v">DONE</span></td><td>D-017–D-020; <code>mandi/gazetteer.yaml</code>, <code>data/benchmark/text.jsonl</code>; PR #15–#20</td></tr>
+<tr><td>5.1–5.5</td><td>Gateway + echo bot, voice-note download, QC + realism check E1, normalisers (number/unit/quantity/horizon), <b>M1 gate passed</b> (live replay: 1 event / 1 job / 1 reply)</td><td><span class="tag v">DONE</span></td><td>D-021–D-026; <code>results/E1/</code>; <code>scripts/m1_replay.py</code>; PR #21–#29</td></tr>
+<tr><td>6.1</td><td>Crop/place resolver: <code>mandi/resolve.py</code> (exact alias → fuzzy ≥ 0.85, margin 0.15 → UNKNOWN; pin → nearest mandi, > 150 km OUT_OF_COVERAGE)</td><td><span class="tag v">DONE</span></td><td>D-027; <code>tests/test_resolve.py</code> (77 alias cases); PR #30</td></tr>
+<tr><td>6.2</td><td>Orchestrator skeleton <code>app/handlers.py::handle_turn</code>: coalescing, STOP deletes the user, consent then answer, query_state load/save (reply still an echo). Migration 003.</td><td><span class="tag a">PARTIAL</span></td><td>D-028; PR #31. Code done; <b>not yet deployed to the VM / no live check</b></td></tr>
+<tr><td>6.3</td><td>Feature builder FS-S (<code>mandi/features/fs_s.py</code>), leakage tests L1–L5</td><td><span class="tag v">DONE</span></td><td>D-029; <code>tests/test_features.py</code>; PR #32</td></tr>
+<tr><td>6.4</td><td>30 voice notes + 5 controls written with gold; <code>scripts/voice_pull.py</code> (recording sheet; pulls a note through the real media path into <code>audio/</code> + <code>manifest.csv</code>)</td><td><span class="tag a">PARTIAL</span></td><td>D-030 (PROPOSED); PR #33. <b>DONE = 10 notes recorded: 0 so far</b> (needs volunteers, see §6)</td></tr>
+</table>
+<p class="small">Full open-items list with how-to: <code>PENDING.md</code> (repo root). Every choice made so far is in <code>DECISIONS.md</code> (D-001 to D-030; <b>next free ID: D-031</b>). Local test suite: 471 passed, 0 skipped (with Postgres).</p>
+
+<h2>2. What I need from you (in order)</h2>
+<ol>
+<li><b>Next developer: set up and run the tests (Day 7 morning).</b> Run the suite and confirm it is green before writing code (§5).</li>
+<li><b>Next developer: build 7.1 (Day 7, CRIT).</b> This unblocks 9.1 (renderer), 11.x (wiring) and 15.3 (benchmark run). Spec in §3.</li>
+<li><b>Next developer: build 7.2 (Day 7, CRIT).</b> This unblocks multi-turn follow-ups (M-FU items) and scenario 3. Spec in §4. Do it after 7.1, or alongside it: 7.2 depends only on 6.2.</li>
+<li><b>Taha: voice recordings + speaker names by Day 9 (Thu 3 Dec)</b>, which unblocks the 9.4 benchmark freeze. <b>Taha: deploy main to the VM</b>, which closes 6.2.</li>
+</ol>
+
+<h2>3. Task 7.1: rule-based parser</h2>
+<p><b>DONE condition (file 11):</b> "Scored on the benchmark texts committed so far; numbers logged as the D9 baseline." This is a <i>baseline</i>: no threshold has to pass. You must produce a score file and a DECISIONS.md entry. File 05 §5 has the thresholds the full pipeline must reach later; report your numbers against them.</p>
+<p><b>Read first:</b> RFC (file 08) C6 + §3 steps 4–6 + §9 "Deterministic"; file 05 §3–§5 (P0 = this parser; LLM fallback only if P0 is incomplete); <code>data/benchmark/SPEC.md</code> §2 + <b>§2.5 labelling rules (binding)</b>; D-020, D-025, D-027.</p>
+
+<h3>3.1 Interface (put it in <code>mandi/parse.py</code>, pure library, no DB, no LLM, no new dependency)</h3>
+<pre>parse(text: str, now: date | None = None) -&gt; dict
+# returns exactly the benchmark gold shape, so scoring is a field-by-field comparison:
+{"intent": "WHERE_TO_SELL",
+ "slots": {"crop":     {"raw": "pyaz", "id": "ONION"},                       # or null; a list of 2 for two crops
+           "place":    {"raw": "Okara", "canonical": "OKARA", "status": "RESOLVED", "role": "ORIGIN"},
+           "quantity": {"raw": "50 mann", "value": 50, "unit": "MANN", "value_kg": 2000},
+           "horizon":  null},
+ "tool": {"name": "best_mandis", "args": {"crop": "ONION", "origin": "OKARA", "quantity_kg": 2000}},
+ "outcome": "ANSWER", "clarify_slot": null}            # + "alert_action" only when intent = ALERT</pre>
+
+<h3>3.2 Reuse, don't rewrite</h3>
+<table>
+<thead><tr><th>Need</th><th>Use</th><th>Note</th></tr></thead>
+<tr><td>Text normalising</td><td><code>mandi.gazetteer.norm</code></td><td>Same key the alias tables use</td></tr>
+<tr><td>Crop / place from a span</td><td><code>mandi.resolve.resolve_crop(raw)</code>, <code>resolve_place(raw)</code> → <code>Resolution(status, ids, exact, mandi_ids)</code></td><td>The parser's job is <b>finding spans</b> in a whole message (6.1 left this to 7.1)</td></tr>
+<tr><td>Quantity</td><td><code>mandi.normalise.quantity(span)</code> → <code>Quantity(value, unit, value_kg, ask, reason)</code></td><td><code>ask=True</code> (bori, crate, number without a unit) → CLARIFY <code>quantity_unit</code></td></tr>
+<tr><td>Horizon</td><td><code>mandi.normalise.horizon(text, now, future=...)</code></td><td>Pass <code>future=True</code> when a future verb is present (hoga, hogi, rahega, will) so "kal" → h = 1; bare "kal ka rate" → AMBIGUOUS</td></tr>
+<tr><td>Numbers</td><td><code>mandi.normalise.number</code>, <code>NUMBER_WORDS</code></td><td>Careful: "do", "so", "ek" are number words <i>and</i> ordinary words</td></tr>
+<tr><td>STOP words</td><td><code>app/handlers.py::STOP_WORDS</code></td><td>Move the set into <code>mandi/parse.py</code> and import it in handlers, so there is one source</td></tr>
+</table>
+
+<h3>3.3 Algorithm (suggested; keep it short and readable)</h3>
+<ol>
+<li><b>STOP:</b> the whole normalised message is in STOP_WORDS → intent STOP, tool <code>stop</code>, args <code>{}</code>.</li>
+<li><b>Span finding:</b> tokenise <code>norm(text)</code>. Slide n-grams longest first (4 → 1 tokens). Mark a span as crop or place when <code>resolve_*</code> returns anything except UNKNOWN on an <b>exact</b> alias. Try fuzzy only on leftover tokens of length ≥ 4, so short words like "khan" or "do" don't match. Tokens already used cannot be reused. Two crop spans → crop list (T-AMB-06). A "&lt;word&gt; mandi" with no resolved place → place UNKNOWN with raw = that word (T-AMB-03 "Block").</li>
+<li><b>Quantity:</b> find a unit token (mann, maund, kg, ton, bori…) or a number directly before a crop. Pass the span <i>number + unit</i> to <code>quantity()</code>. <code>raw</code> must be the exact substring of the input (the test checks <code>raw in input</code>). Watch out: Punjabi "ton" can mean "from", as in voice item V21 "Kasur ton…".</li>
+<li><b>Intent</b> (first match wins): STOP → ALERT (above/below/upar/neeche + number, "bata dena", "tell me when") → WHERE_TO_SELL ("kahan bech", "kis mandi", "best mandi", "where should I sell", "sell karna", "bhejun") → OUTLOOK (month horizon or "outlook") → FORECAST (future horizon or "forecast") → PRICE_NOW ("rate", "bhaao", "price", "qeemat") → HELP ("help", "madad", "kaise use") → OTHER.</li>
+<li><b>Outcome</b> (SPEC §2.5):
+  <ul>
+  <li>Uncovered crop (kapas, chawal) → OUT_OF_COVERAGE. Place outside Punjab → OUT_OF_COVERAGE.</li>
+  <li>OTHER, or a non-price question → OUT_OF_SCOPE.</li>
+  <li>A required slot is missing → CLARIFY with the first missing in the order crop, place, quantity_unit, horizon. WHERE_TO_SELL needs crop + origin + quantity in kg; FORECAST needs h; AMBIGUOUS horizon → CLARIFY horizon.</li>
+  <li>WHEAT only with OUTLOOK.</li>
+  </ul></li>
+<li><b>Tool</b> (only when outcome = ANSWER) from the §2.5 table: price_now(crop, mandi), get_forecast(crop, mandi, h), best_mandis(crop, origin, quantity_kg), get_outlook(crop, month[, mandi]), set_alert(crop, mandi, direction, threshold), stop().</li>
+</ol>
+
+<h3>3.4 Scoring (the DONE evidence)</h3>
+<ul>
+<li><code>scripts/score_parser.py</code> runs <code>parse()</code> on every item in <code>data/benchmark/text.jsonl</code> (40) <b>and</b> on <code>voice.jsonl</code> using <code>gold_transcript.roman</code> as input (30). Together these are "the benchmark texts committed so far".</li>
+<li>Write <code>results/D9/parser_items.csv</code> (one row per item: id, each field ok/miss, parsed vs gold) and <code>results/D9/README.md</code> with:
+  <ul>
+  <li>intent accuracy;</li>
+  <li>critical-slot exact match (crop.id, place.status + canonical, quantity.value_kg + unit);</li>
+  <li>clarify rate on AMB items and unneeded clarifies on the others;</li>
+  <li>OOS redirect rate;</li>
+  <li>correct tool.</li>
+  </ul>
+  Use the file 05 §5 metric names.</li>
+<li><code>tests/test_parser.py</code>: one unit case per intent and per outcome kind; spans for alias, Urdu script, number words and Punjabi crop names; the two-crop list; STOP. Add a <b>regression floor</b> on the overall scores, set just below your first measured numbers, so later changes can't silently drop them.</li>
+<li>DECISIONS.md <b>D-031</b>: the baseline numbers, every rule you chose that SPEC does not fix, and the items it still misses (these feed the LLM fallback decision in file 05).</li>
+<li><b>Do not tune the gold to the parser.</b> If gold looks wrong, record it in D-031 and ask Taha. The labelling rules are binding (D-020).</li>
+<li>Not in 7.1: wiring into <code>handle_turn</code> (that comes with 7.2 / 9.1), the LLM fallback (file 05 decision rule), and reply text (9.1 renderer).</li>
+</ul>
+
+<h2>4. Task 7.2: query state manager</h2>
+<p><b>DONE condition (file 11):</b> "Unit tests: crop switch, place add, quantity correction, position reference, 24 h expiry: all pass."</p>
+<p><b>Read first:</b> file 06 §4 (state model + required examples table) and §5 edge cases 1, 2 and 4; RFC C7 and §8 (Conversation tables); D-028 (what 6.2 already built); SPEC §2.4 (multi-turn item shape: <code>state_after</code>).</p>
+
+<h3>4.1 What exists today</h3>
+<p><code>query_state(user_key PK → wa_user ON DELETE CASCADE, state jsonb, version, updated_at)</code> exists (migration 003). <code>handle_turn</code> already loads <code>state</code>, writes it back with version + 1, and holds the farmer's advisory lock, so there is no concurrent writer. STOP calls <code>_forget</code>, which deletes the <code>wa_user</code> row, so <b>every new table must reference <code>wa_user</code> with ON DELETE CASCADE</b> or STOP stops deleting everything.</p>
+
+<h3>4.2 Migration <code>app/migrations/004_state_manager.sql</code> (new file; never edit 001–003)</h3>
+<pre>query_patch_log       (id identity PK, user_key → wa_user CASCADE, version int, patch jsonb, message_id text, created_at)
+answer_shown          (answer_id identity PK, user_key → wa_user CASCADE, kind CHECK (PRICE|F1|F2|F3),
+                       run_id text NULL, positions jsonb  -- ["OKARA","LAHORE",...] position 1..n -> mandi id
+                       reply_wamid text, shown_at timestamptz)
+pending_clarification (user_key PK → wa_user CASCADE, slot text, candidates jsonb, asked_wamid text,
+                       turns_open int DEFAULT 0, expires_at timestamptz)</pre>
+
+<h3>4.3 Library (<code>mandi/state.py</code> or <code>app/state.py</code>; pure functions for the merge, small DB helpers)</h3>
+<table>
+<thead><tr><th>Function</th><th>Behaviour (file 06 §4.1)</th></tr></thead>
+<tr><td><code>apply(state, patches, source, now) -&gt; state</code></td><td>Ops: <b>set</b> (replace a slot), <b>add</b> (place: union of mandi ids, "Lahore ka bhi"), <b>clear</b>, <b>correct</b> ("nahi, 80 mann" = set + mark the old value corrected). Each slot keeps provenance <code>{value, raw, source: text|voice|pin|inferred, confidence, confirmed, updated_at}</code>. A crop switch ("aur tamatar?") keeps place, quantity and intent. A new intent replaces the old one.</td></tr>
+<tr><td><code>snapshot(state) -&gt; dict</code></td><td>The SPEC §2.4 <code>state_after</code> shape <code>{intent, crop, place:{canonical, role}, quantity_kg, horizon}</code>, so 15.3 can score the M-FU items directly.</td></tr>
+<tr><td><code>record_answer(conn, user_key, kind, run_id, positions, reply_wamid)</code></td><td>Called after a send that showed a ranked list.</td></tr>
+<tr><td><code>resolve_position(conn, user_key, n, now) -&gt; mandi_id | None</code></td><td>"2 number wali": the <b>latest</b> answer only, and only if <code>shown_at</code> is within <b>24 h</b>. Older or missing → None (caller re-fetches or asks). A quoted reply (context.id = reply_wamid) may pick that answer; numbers are always re-fetched.</td></tr>
+<tr><td><code>open_clarification / answer_clarification / tick</code></td><td>One open question per farmer. While it is open, no tool call that needs that slot. If ignored: keep it, process the new slots, re-ask once, expire after 2 turns (§5.4).</td></tr>
+<tr><td>Expiry</td><td>Positions: 24 h, latest answer only. Whole state: reset after 30 days idle (on load).</td></tr>
+</table>
+
+<h3>4.4 Tests (the DONE condition, plus what protects it)</h3>
+<ul>
+<li><code>tests/test_state.py</code>: crop switch (keeps place + quantity); place add (union); quantity correction (80 mann replaces 50, value_kg 3200); position reference (latest answer, position 2 → its mandi id); 24 h expiry (shown 24 h + 1 s ago → None); clarification expires after 2 turns; 30-day reset.</li>
+<li>DB tests use the existing <code>conftest.py</code> <code>db</code> fixture with <code>TEST_DATABASE_URL</code>. STOP still leaves 0 rows for the user in all new tables: extend <code>tests/test_handlers.py::test_stop_confirms_and_deletes_the_farmer</code>.</li>
+<li><code>tests/test_migrate.py</code> picks up 004 automatically; keep it green.</li>
+<li>Wiring: in <code>handle_turn</code>, replace the empty <code>state</code> round-trip with <code>apply(...)</code> and write one <code>query_patch_log</code> row per turn. With no patches yet, this is a no-op until the parser output is connected. DECISIONS.md <b>D-032</b>.</li>
+</ul>
+
+<h2>5. How to work in this repo (rules + commands)</h2>
+<table>
+<thead><tr><th>Rule</th><th>How</th></tr></thead>
+<tr><td>Read the plan, don't guess</td><td><code>plan3/pdf/</code> (start at <code>00_README_Index</code>). Precedence: A1 (file 03 §9) &gt; red-team (file 09 §D) &gt; RFC (08) &gt; files 02–07. <code>CLAUDE.md</code> lists the never-cut items.</td></tr>
+<tr><td>One branch per task</td><td><code>git worktree add .claude/worktrees/task-7.1-parser -b task-7.1-parser origin/main</code> → commit → push → PR to <code>main</code> → <b>merge only when CI is green</b> (jobs: secrets, test, image). No "Co-Authored-By" / "Generated with" lines.</td></tr>
+<tr><td>Python</td><td>3.12; <code>py -3.12 -m venv .venv; .venv\Scripts\pip install -e ".[dev]"</code> (check <code>pyproject.toml</code> extras). Lint: <code>ruff check .</code></td></tr>
+<tr><td>Tests with Postgres, 0 skipped</td><td><code>docker run -d --name mandi-test-pg -e POSTGRES_PASSWORD=ci -p 55432:5432 postgres:16</code><br><code>TEST_DATABASE_URL=postgresql://postgres:ci@localhost:55432/postgres PYTHONIOENCODING=utf-8 python -m pytest -q</code><br>Expected on main today: <b>471 passed, 0 skipped</b>. A skipped DB test means the URL is missing.</td></tr>
+<tr><td>Windows</td><td>Set <code>PYTHONIOENCODING=utf-8</code> when printing Urdu. Benchmark jsonl/csv are kept LF by <code>.gitattributes</code>.</td></tr>
+<tr><td>Data</td><td>FYP-I is <b>synthetic only</b> (source = SYN); every reply says "Demo data (synthetic)". No real-market accuracy claims. Never scrape Zarai Mandi.</td></tr>
+<tr><td>Secrets</td><td><code>.env</code> only, never in git or chat. 7.1 and 7.2 need <b>no</b> secrets (pure library + local DB).</td></tr>
+<tr><td>Architecture</td><td>Modular monolith: no agent framework, vector DB, Redis, broker or microservices. The LLM never writes a number (template-rendered facts, validator).</td></tr>
+<tr><td>Bookkeeping</td><td>A decision per task in <code>DECISIONS.md</code> (D-031 for 7.1, D-032 for 7.2), with the CI run link. Remove finished lines from <code>PENDING.md</code> in the same PR.</td></tr>
+</table>
+
+<h2>6. Open items and risks</h2>
+<table>
+<thead><tr><th>Item</th><th>Tag</th><th>Owner</th><th>Next step</th></tr></thead>
+<tr><td>6.4 recordings: 0 of 30 notes + 0 of 5 controls. Speakers S2, S4, S6 unnamed, S3 (supervisor) not asked, S5 consent date not written. Due Day 9.</td><td><span class="tag v">VERIFIED</span></td><td>Taha</td><td>Volunteers send notes straight to the test number; pull with <code>voice_pull.py</code> (steps in <code>PENDING.md</code> §1)</td></tr>
+<tr><td>Meta serves an already-downloaded voice note a second time (the pull depends on it)</td><td><span class="tag a">BELIEF · VERIFY</span></td><td>Taha</td><td>Try one note (V01) end to end first</td></tr>
+<tr><td>6.2 not deployed on the VM; live consent/STOP check not done</td><td><span class="tag v">VERIFIED</span></td><td>Taha</td><td>VM: <code>git pull; sudo docker compose up -d --build</code>; text, then STOP</td></tr>
+<tr><td>Benchmark gold + Urdu transcripts single-annotated</td><td><span class="tag a">ASSUMPTION</span></td><td>Taha</td><td>Proofread before 9.4 (Day 10). A parser disagreement may point to a gold error; record it, don't edit it silently.</td></tr>
+<tr><td>Short aliases ("khan", "ganda", "الو") over-match when scanning whole messages</td><td><span class="tag v">VERIFIED</span> (D-019 gap)</td><td>7.1 dev</td><td>Exact-alias spans first, fuzzy only on long leftover tokens; "khan" is in the gazetteer's <code>ambiguous:</code> list</td></tr>
+<tr><td>SPEC unit enum has no CRATE, but <code>normalise.quantity</code> returns CRATE</td><td><span class="tag v">VERIFIED</span> (D-025)</td><td>7.1 dev</td><td>Treat as ask → CLARIFY quantity_unit; record in D-031</td></tr>
+<tr><td>G1: co-supervisor acknowledges the real-data request by Fri 4 Dec</td><td><span class="tag r">REPORTED</span></td><td>Taha</td><td>Chase on WhatsApp</td></tr>
+<tr><td>Tomato synthetic medians below envelope in 7/10 years (D-024)</td><td><span class="tag v">VERIFIED</span></td><td>Taha</td><td>Fix before the G2 spec freeze; re-run L2</td></tr>
+</table>
+
+<h2>7. Not done / not checked</h2>
+<ul>
+<li>The algorithm in §3.3 is a suggestion from the plan and the gold. It has not been run, so expect to adjust the rules once you score them.</li>
+<li>The multi-turn benchmark file (<code>multiturn.jsonl</code>, 30 items) does not exist yet. It is written for 9.4, so 7.2 tests use hand-made cases in the SPEC §2.4 shape.</li>
+<li>Days 7–20 beyond 7.1/7.2 (7.3 baselines, 8.x speech/price service, 9.x renderer + freeze) are not covered here; see file 11.</li>
+</ul>
+</body></html>
