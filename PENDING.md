@@ -55,4 +55,4 @@ end before the rest. Whether a volunteer number not on Meta's test-recipient lis
 | D-002 user-agent contact email | FYP-II only | Choose before any AMIS fetching. |
 
 ## 3. Next plan tasks (critical path)
-Day 7: **7.1** rule parser, **7.3** baselines E2 (needs 6.3 + 3.4). Then Day 8 onward per file 11.
+Day 7: **7.3** baselines E2 (needs 6.3 + 3.4). **7.1** rule parser done (D-031; D9 baseline in `results/D9/`). Then Day 8 onward per file 11.
