@@ -162,7 +162,8 @@ def sanity(text: str, duration_s: float) -> str | None:
     for a, b in zip(words, words[1:], strict=False):
         run = run + 1 if a.casefold() == b.casefold() else 1
         best = max(best, run)
-    if best >= 4 or (len(words) >= 8 and len({w.casefold() for w in words}) / len(words) < 0.3):
+    # only machine-length loops: a person testing the bot says "hello hello hello hello hello hello" (live 2026-11-28, D-035)
+    if best >= 8 or (len(words) >= 16 and len({w.casefold() for w in words}) / len(words) < 0.25):
         return "repeat_loop"
     for ch in text:
         if ch.isalpha() and not unicodedata.name(ch, "").startswith(("LATIN", "ARABIC", "DEVANAGARI")):
@@ -208,7 +209,8 @@ def transcribe(path: str) -> tuple[str | None, dict]:
             attempt["ms"] = round((time.monotonic() - t0) * 1000)
             text = strip_tags(text)
             if reason := sanity(text, heard_s):
-                attempt.update(outcome="rejected", reason=reason)
+                # the rejected text stays in stt_meta (same row, retention and STOP as the transcript), never in logs
+                attempt.update(outcome="rejected", reason=reason, text=text[:200] or None)
                 continue
             attempt["outcome"] = "ok"
             meta.update(provider=provider, **extra)
