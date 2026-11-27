@@ -16,6 +16,7 @@ import functools
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 import unicodedata
@@ -106,7 +107,8 @@ def _open(req: urllib.request.Request) -> dict:
 def scribe(path: str, key: str) -> tuple[str, dict]:
     """ElevenLabs Scribe v2 (POST multipart). Returns (text, {language, language_probability})."""
     boundary = uuid.uuid4().hex
-    parts = [("model_id", SCRIBE_MODEL), *(("keyterms", t) for t in keyterms())]
+    # tag_audio_events off: Scribe otherwise answers a noise-only note with "[background noise]" (live check, D-035)
+    parts = [("model_id", SCRIBE_MODEL), ("tag_audio_events", "false"), *(("keyterms", t) for t in keyterms())]
     body = b"".join(f'--{boundary}\r\nContent-Disposition: form-data; name="{n}"\r\n\r\n{v}\r\n'.encode() for n, v in parts)
     with open(path, "rb") as f:
         body += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="note.ogg"\r\n'
@@ -132,6 +134,14 @@ def gemini(path: str, key: str, model: str) -> tuple[str, dict]:
     except (KeyError, IndexError, TypeError):
         raise STTError("no candidate (blocked or empty)") from None
     return text, {"finish_reason": cand.get("finishReason")}
+
+
+_TAG = re.compile(r"\[[^\]]*\]|\([^)]*\)")  # "[background noise]", "(music)": sound labels, not words
+
+
+def strip_tags(text: str) -> str:
+    """Drop bracketed sound labels so a note that is only a label counts as empty (and goes to the next provider)."""
+    return " ".join(_TAG.sub(" ", text).split())
 
 
 def sanity(text: str, duration_s: float) -> str | None:
@@ -189,6 +199,7 @@ def transcribe(path: str) -> tuple[str | None, dict]:
                 attempt.update(outcome="error", error=err, ms=round((time.monotonic() - t0) * 1000))
                 continue
             attempt["ms"] = round((time.monotonic() - t0) * 1000)
+            text = strip_tags(text)
             if reason := sanity(text, heard_s):
                 attempt.update(outcome="rejected", reason=reason)
                 continue
