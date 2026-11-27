@@ -293,7 +293,7 @@ Task 6.2 orchestrator skeleton (`app/handlers.py` `handle_turn`, migration `003_
 - **Known gap for 15.2 / scenario 4:** Meta's status webhooks for the STOP confirmation arrive after the delete and leave `inbound_event`/`job` rows with the farmer's key; scenario 4's "no rows remain" check needs those dropped.
 - DONE evidence: `tests/test_handlers.py::test_first_contact_gets_consent_then_reply_and_only_once`, `::test_burst_of_three_pending_messages_is_one_turn` (3 jobs → 1 send in wa_ts order), `::test_stop_confirms_and_deletes_the_farmer`; M1 replay test now expects consent + reply on first contact. PR #31 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45663011224 (secrets, test, image green).
 
-## D-029 · 2026-11-27 · Taha · PROPOSED
+## D-029 · 2026-11-27 · Taha · CONFIRMED
 Task 6.3 FS-S feature builder (`mandi/features/fs_s.py`) and leakage tests L1–L5 (`tests/test_features.py`; file 04 §1.2–1.3, file 03 §3/§9.1, file 09 R-13). Choices the plan leaves open:
 - **Known-from rule (T1):** a row is usable on issue day t only if `reported_at < t 00:00 PKT`, i.e. from `date_pkt(reported_at) + 1`. LAST = newest mid known at t (market date t−1 when it was published on time; older when it was late or missing). Target y = mid on market date t+h−1; no quote that day → row dropped. Harness convention (D-016): X col 0 = LAST, dates = issue day, one h per evaluation (`make_xy` pools h as the last column).
 - **Mid = (min+max)/2** (file 04 §1.2), avg only when min or max is missing; not `qc.mid` (prefers avg, which carries the generator's 10× typos). Rows with `outlier_flag` ≠ OK are skipped in features and targets.
@@ -310,4 +310,4 @@ Task 6.3 FS-S feature builder (`mandi/features/fs_s.py`) and leakage tests L1–
 - **Measured (2026-11-27, local):** L2 on SYN, OLS reference learner: base MASE 0.9939 / 0.9911 / 0.9908 (h 1/2/3), delayed 0.9911 / 0.9908 / 0.9902: passes, no collapse. SYN-NULL for comparison: MASE 1.0009 / 1.0013 / 1.0012 (no false skill). Skill is small (< 1%) with this linear learner; the LightGBM model (7.x) is judged by S1, not here. **Fragility:** if the spec changes before G2 (D-024 tomato finding) and OLS skill drops to ≤ 0, L2 fails on its precondition, not on leakage; re-check then.
 - **Mutation check (local, reverted):** dropping the known-from mask, filtering on market date, a centred window, a full-panel arrivals norm, and a region median that ignores known-from each made L1/L3 fail.
 - Inputs stop at the dev end 2025-12-18; the holdout year is never read. DB-free; the builder takes price_obs-shaped rows (7.3 adds the DB read).
-- DONE evidence: `tests/test_features.py` 13 tests (L1–L5 incl. leak controls) pass locally; CI run: TBD.
+- DONE evidence: `tests/test_features.py` 13 tests (L1–L5 incl. leak controls) pass; PR #32 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45954538702 (secrets, test, image green).
