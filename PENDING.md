@@ -1,10 +1,10 @@
 # What is missing (open items)
 
 Last updated: Fri 27 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-031). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-033). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged.
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032) merged.
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done
@@ -55,4 +55,4 @@ end before the rest. Whether a volunteer number not on Meta's test-recipient lis
 | D-002 user-agent contact email | FYP-II only | Choose before any AMIS fetching. |
 
 ## 3. Next plan tasks (critical path)
-Day 7: **7.3** baselines E2 (needs 6.3 + 3.4). **7.1** rule parser done (D-031; D9 baseline in `results/D9/`). Then Day 8 onward per file 11.
+Day 7: **7.3** baselines E2 (needs 6.3 + 3.4). Then Day 8 onward per file 11. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
