@@ -3,9 +3,10 @@
 Runs inside the web container on the VM (the image has no scripts/, so pipe it in):
     sudo docker compose exec -T web python - 923XXXXXXXXX < scripts/m1_replay.py
 
-The number is a team phone. It posts one text "from" that phone, waits for the worker's echo, posts the same body again
+The number is a team phone. It posts one text "from" that phone, waits for the worker's reply, posts the same body again
 (as Meta's redelivery would), and checks: 1 inbound_event, 1 job, 1 outbound_message (2 on first contact: consent +
-echo, task 6.2). The phone must get exactly one "Echo: M1 replay test ..." reply.
+reply, task 6.2). The phone must get exactly one reply; since 10.1 (D-047) that is the bot's parsed answer to
+"M1 replay test ...", a fixed template, no longer an "Echo: ..." line.
 Exit code 0 = PASS. Needs META_APP_SECRET and DATABASE_URL (the container's .env).
 """
 import hashlib

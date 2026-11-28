@@ -7,9 +7,13 @@
   3. consent gate: first contact gets the consent + AI disclosure text, then the turn is answered (file 10 scenario 1);
   4. load query_state (reset after 30 days idle), apply the turn's patches, build the reply, save query_state (version + 1)
      with one query_patch_log row, once per turn job (app/state.py, task 7.2, D-032).
+Text turns (task 10.1, D-047): the turn's texts, joined in order → rule parser (7.1) → RESOLVED slots as state patches →
+the parser's outcome for this turn decides the reply: PRICE_NOW → price service (8.2) → price template (9.1); CLARIFY,
+out of coverage / scope and HELP → their fixed templates; intents not wired yet (FORECAST, WHERE_TO_SELL, OUTLOOK, ALERT:
+13.1/16.1) → the fixed "maloomat nahi" reply. Every reply goes through render.compose (no LLM until 11.2) and is logged in
+message_log with the parser's intent, tool calls and the validator result. Follow-ups from the stored state are 14.2.
+Voice notes and other message types keep the echo reply (the 6.4 recording procedure expects it; voice → parser is 13.2).
 Voice notes are transcribed inside the turn by app/speech.py (task 8.1, D-035) and logged in message_log.
-The reply is still an echo of the turn's messages and the patch list is still empty: connecting the parser (7.1) output
-as patches and the renderer (9.1) replace it.
 
 `handle_status` advances the matching outbound_message as Meta reports sent → delivered → read (forward-only; never
 regresses, never moves past a terminal 'failed').
@@ -25,10 +29,13 @@ from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
 
-from app import crypto, gateway, speech
+from app import crypto, gateway, render, speech
 from app import state as qstate
 from app.render import CONSENT_TEXT, STOP_TEXT  # noqa: F401  (tests read them as handlers.*)
-from mandi.parse import STOP_WORDS  # single source of truth for the stop keywords (task 7.1, handoff §3.2)
+from mandi import price as prices
+from mandi.gazetteer import read as read_gazetteer
+from mandi.parse import STOP_WORDS, parse  # STOP_WORDS: single source of truth for the stop keywords (7.1, handoff §3.2)
+from mandi.resolve import resolve_place
 
 log = logging.getLogger(__name__)
 
@@ -87,8 +94,9 @@ def _is_stop(msg: dict) -> bool:
     return " ".join(re.sub(r"[^\w\s]", " ", msg["text"]["body"].casefold()).split()) in STOP_WORDS
 
 
-def _send(conn, job, seq: int, to: str, body: str) -> None:
-    """Send one text through the outbox row (job_id, seq). Raises SendRetryable (worker retries); other failures are kept."""
+def _send(conn, job, seq: int, to: str, body: str, buttons: list[dict] | None = None) -> str | None:
+    """Send one text (or text + reply buttons) through the outbox row (job_id, seq). Returns the WAMID once sent (also on a
+    re-claim that finds it sent), else None. Raises SendRetryable (worker retries); other failures are kept."""
     existing = conn.execute(
         "SELECT status, wamid FROM outbound_message WHERE job_id = %s AND seq = %s", (job.id, seq)
     ).fetchone()
@@ -97,14 +105,15 @@ def _send(conn, job, seq: int, to: str, body: str) -> None:
         # already sent (crash-safe no-op), or a prior pending/ambiguous we must never blind-resend, or a recorded failure
         if wamid or status != "failed":
             log.info("turn job %s: outbound seq %s already %s; no resend", job.id, seq, status)
-        return
+        return wamid
+    out = {"type": "buttons", "text": body, "buttons": buttons} if buttons else {"type": "text", "text": body}
     # record the intent BEFORE the network call so a re-claim after a crash sees it and will not double-send (RFC §13)
     conn.execute(
         "INSERT INTO outbound_message (job_id, seq, user_key, body, status) VALUES (%s, %s, %s, %s, 'pending')",
-        (job.id, seq, job.user_key, Jsonb({"type": "text", "text": body})),
+        (job.id, seq, job.user_key, Jsonb(out)),
     )
     try:
-        wamid = gateway.send_text(to, body)
+        wamid = gateway.send_buttons(to, body, buttons) if buttons else gateway.send_text(to, body)
     except gateway.SendRetryable:
         # not accepted; clear the intent so the worker's backoff retry starts clean
         conn.execute("DELETE FROM outbound_message WHERE job_id = %s AND seq = %s", (job.id, seq))
@@ -115,7 +124,7 @@ def _send(conn, job, seq: int, to: str, body: str) -> None:
             (f"{type(e).__name__}: {e}"[:500], job.id, seq),
         )
         log.error("turn job %s: permanent send failure; not retried", job.id)  # farmer fallback reply is task 17.1
-        return
+        return None
     except gateway.SendAmbiguous as e:
         # maybe delivered: leave the row 'pending' so any re-claim refuses to resend (RFC §13 "no blind resend")
         conn.execute(
@@ -123,11 +132,96 @@ def _send(conn, job, seq: int, to: str, body: str) -> None:
             (f"{type(e).__name__}: {e}"[:500], job.id, seq),
         )
         log.error("turn job %s: ambiguous send; left pending, will not resend", job.id)
-        return
+        return None
     conn.execute(
         "UPDATE outbound_message SET wamid = %s, status = 'sent', status_at = now() WHERE job_id = %s AND seq = %s",
         (wamid, job.id, seq),
     )
+    return wamid
+
+
+# --- text turn: parser → state → tool → template (task 10.1, D-047) ----------------------------------------------------
+
+STATE_INTENTS = ("PRICE_NOW", "FORECAST", "WHERE_TO_SELL", "OUTLOOK", "ALERT")  # HELP / OTHER / STOP are not stored
+
+
+def _patches(parsed: dict) -> list[dict]:
+    """The turn's RESOLVED slots as state patches (op set). An unknown, ambiguous or out-of-coverage place, a crop list, a
+    bori without weight or a bare 'kal' is never stored: the reply asks about it instead."""
+    s, out = parsed["slots"], []
+    if parsed["intent"] in STATE_INTENTS:
+        out.append({"slot": "intent", "op": "set", "raw": None, "value": parsed["intent"]})
+    crop = s["crop"]
+    if isinstance(crop, dict) and crop["id"] in read_gazetteer()["crops"]:
+        out.append({"slot": "crop", "op": "set", "raw": crop["raw"], "value": crop["id"]})
+    place = s["place"]
+    if place and place["status"] == "RESOLVED":
+        mandis = list(resolve_place(place["raw"]).mandi_ids) or [place["canonical"]]
+        out.append({"slot": "place", "op": "set", "raw": place["raw"], "value": {
+            "canonical": place["canonical"], "status": "RESOLVED", "role": place["role"], "mandi_ids": mandis}})
+    q = s["quantity"]
+    if q and q.get("value_kg") is not None:
+        out.append({"slot": "quantity", "op": "set", "raw": q.get("raw"),
+                    "value": {"value": q["value"], "unit": q["unit"], "value_kg": q["value_kg"]}})
+    h = s["horizon"]
+    if h and h["kind"] != "AMBIGUOUS":
+        out.append({"slot": "horizon", "op": "set", "raw": None, "value": h})
+    return out
+
+
+def _calls(parsed: dict) -> list[dict]:
+    t = parsed["tool"]
+    return [] if t is None else t if isinstance(t, list) else [t]
+
+
+def _facts(conn, parsed: dict, lang: str, now: datetime) -> tuple[render.Reply, set[str]]:
+    """The template reply for this turn's parse, and the place ids it may name (validator `allowed`)."""
+    outcome, intent = parsed["outcome"], parsed["intent"]
+    if outcome == "OUT_OF_COVERAGE":
+        return render.out_of_coverage(lang), set()
+    if outcome == "OUT_OF_SCOPE":
+        return render.out_of_scope(lang), set()
+    if outcome == "CLARIFY":
+        slot, place = parsed["clarify_slot"], parsed["slots"]["place"]
+        cands = list(resolve_place(place["raw"]).ids) if slot == "place" and place and place["status"] == "AMBIGUOUS" else None
+        unknown = slot == "place" and place is not None and place["status"] == "UNKNOWN"  # named but not found (D-045)
+        return render.clarify(slot, lang, cands, unknown_place=unknown), set(cands or ())
+    if intent == "HELP":
+        return render.help_text(lang), set()
+    if intent == "PRICE_NOW":
+        calls = _calls(parsed)
+        replies = [render.price(prices.price_now(conn, c["args"]["crop"], c["args"]["mandi"], now), lang,
+                                c["args"]["crop"], c["args"]["mandi"]) for c in calls]
+        return (replies[0] if len(replies) == 1 else render.join(replies)), {c["args"]["mandi"] for c in calls}
+    return render.unknown(lang), set()  # FORECAST / WHERE_TO_SELL / OUTLOOK / ALERT answers: 13.1 / 16.1
+
+
+def _text_turn(conn, job, to: str, msgs: list[dict], state: dict, now: datetime) -> tuple[dict, list[dict]]:
+    """Answer a text-only turn; returns (state after the patches, patches) for the caller's save."""
+    u = job.user_key
+    text = "\n".join(m["text"]["body"] for m in msgs)
+    lang = render.pick_lang(text)
+    parsed = parse(text, now.astimezone(prices.PKT).date())
+    patches = _patches(parsed)
+    state = qstate.apply(state, patches, "text", now)
+    facts, allowed = _facts(conn, parsed, lang, now)
+    reply, validator = render.compose(facts, None, allowed)  # no framing LLM until 11.2: template only
+    calls = Jsonb(_calls(parsed))
+    for i, m in enumerate(msgs):  # the parse belongs to the turn: logged on its last message
+        last = i == len(msgs) - 1
+        conn.execute(
+            "INSERT INTO message_log (user_key, wamid, direction, modality, text_or_transcript, intent, tool_calls_json)"
+            " VALUES (%s, %s, 'in', 'text', %s, %s, %s) ON CONFLICT (wamid) DO NOTHING",
+            (u, m["id"], m["text"]["body"], parsed["intent"] if last else None, calls if last else None),
+        )
+    wamid = _send(conn, job, REPLY_SEQ, to, reply.text, reply.buttons)
+    if wamid:
+        conn.execute(
+            "INSERT INTO message_log (user_key, wamid, direction, modality, text_or_transcript, intent, tool_calls_json,"
+            " validator_result) VALUES (%s, %s, 'out', 'text', %s, %s, %s, %s) ON CONFLICT (wamid) DO NOTHING",
+            (u, wamid, reply.text, parsed["intent"], calls, Jsonb(validator)),
+        )
+    return state, patches
 
 
 def _forget(conn, job) -> None:
@@ -186,10 +280,13 @@ def handle_turn(conn, job):
         conn.execute("INSERT INTO wa_user (user_key, consent_at) VALUES (%s, now()) ON CONFLICT DO NOTHING", (u,))
 
     now = datetime.now(UTC)
-    patches: list[dict] = []  # parser output → patches is wired with 9.1/10.x; until then the state round-trips unchanged
-    state = qstate.apply(qstate.load(conn, u, now), patches, "text", now)
-    # voice notes are transcribed here, after STOP and the consent row (message_log references wa_user), in wa_ts order
-    _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(conn, u, m) for m in msgs))  # 9.1: render from state + tool payload
+    state = qstate.load(conn, u, now)
+    if all(m.get("type") == "text" for m in msgs):
+        state, patches = _text_turn(conn, job, to, msgs, state, now)
+    else:  # voice / other types: echo (voice → parser is 13.2); no patches, the state round-trips unchanged
+        patches = []
+        # voice notes are transcribed here, after STOP and the consent row (message_log references wa_user), in wa_ts order
+        _send(conn, job, REPLY_SEQ, to, "\n".join(_echo_body(conn, u, m) for m in msgs))
     qstate.save(conn, u, state, patches, msgs[-1].get("id"), job.id)  # version + 1 and one query_patch_log row
     conn.execute(
         "UPDATE wa_user SET last_inbound_at = GREATEST(last_inbound_at,"

@@ -1,7 +1,7 @@
 # What is missing (open items)
 
 Last updated: Sat 28 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-046). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-048; D-046 is reserved for the 9.4 freeze hash). Remove a line here when it is done, in the same PR.
 
 ## Done so far
 Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 ps_v1 draft written (D-041), **awaiting supervisor review** (= DONE). Day 9: 9.1 renderer + validator DONE (D-037); 9.2 E1 final + crop list proposal DONE (D-043, realism PASSED); 9.3 lockbox rehearsal sealed (D-038–D-040; folders in `D:/fyp/data/lockbox/`, back them up outside the repo, never open before the witnessed rehearsal).
@@ -114,3 +114,30 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 ## 3. Next plan tasks (critical path)
 Day 8 onward per file 11.
 7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 wrote `params/ps_v1.yaml` (D-041; `f1_eval` unchanged); rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). SYN-NULL is for F1 false-skill checks only (D-034): 12.2 (E5) runs on SYN; 11.1 also runs a deliberately leaky model on SYN-NULL, which must beat naive (proves the check still has power). 8.2 left for its consumers (D-036): 12.1 calls `price.refresh_coverage` in the batch, writes `outlier_flag` and flips a SUSPECT row back to OK when the next quote confirms it; 9.1/10.1 use `price.price_now` (stale line when `stale`, `None` → maloomat nahi); 14.3/18.2 pin `as_of` to the S-DEMO day. 9.1 left for 10.1 (D-037): pick the reply language, send `Reply.buttons` with `gateway.send_buttons`, add `message_log.validator_result` and store `compose`'s result, pass the payload's place ids (incl. F2 origin) as `allowed`. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
+
+## 4. Task 10.1 live check (DONE condition; code merged = not DONE)
+File 11: **scenario 1 passes on a team phone on live data, ≤ 7 s.** Code and tests: D-047. Do this after the 10.1 PR is
+merged. It also replaces the "6.2 live check" row in §2 (its expected reply is no longer an echo).
+- [ ] **Deploy on the VM** (`~/mandisaathi`): `git pull`, `sudo docker compose up -d --build`; migrate applies 003–006.
+- [ ] **Data:** check what the bot will answer from:
+  `sudo docker compose exec postgres psql -U mandi -d mandi -c "SELECT market_date, min_pkr100kg, max_pkr100kg,
+  reported_at FROM price_obs WHERE crop_id='ONION' AND mandi_id='LAHORE' AND outlier_flag='OK' AND source <> 'SYN-NULL'
+  AND reported_at <= now() ORDER BY market_date DESC, reported_at DESC, obs_id DESC LIMIT 1"` (the same filter as
+  `price.price_now`: rows published in the future are not visible yet). If that row is older than 2 trading days the
+  reply carries the stale line; if there is none it says "taaza rate abhi maujood nahi". Load/extend the data if needed.
+- [ ] **Scenario 1** from a team phone that has never written to the bot (or after STOP): send
+  `Assalam o alaikum, Lahore mein pyaz ka aaj ka rate kya hai?`. Expect: the consent text **once**, then
+  `Pyaz · Lahore · Rs X–Y fi mann (40 kg) · <date> · Demo data (synthetic)` with 3 buttons. X, Y = the newest OK row's
+  min/max × 0.4, rounded half up; the date = its market_date.
+- [ ] **≤ 7 s** (webhook received → Meta accepted the reply): `SELECT i.received_at, m.created_at,
+  m.created_at - i.received_at FROM inbound_event i JOIN message_log m ON m.user_key = i.user_key AND m.direction = 'out'
+  AND m.created_at >= i.received_at WHERE i.kind = 'message' ORDER BY i.id DESC, m.id LIMIT 1`. Not
+  `outbound_message.status_at`: delivered/read webhooks overwrite it.
+- [ ] **No LLM number:** the `message_log` `out` row has `validator_result` = `{"used": "template_only", ...}`.
+- [ ] **STOP** (the 6.2 check): send STOP → confirmation, then `SELECT count(*) FROM wa_user` drops by one.
+- [ ] Record the result (reply text, seconds) in D-047, set it CONFIRMED, tick 10.1 DONE here.
+- **Do not** use a phone that still has 6.4 voice notes waiting to be pulled for the STOP step.
+- **Expected until 14.2, not 10.1 bugs:** (1) answering the bot's question by typing ("aloo ka rate" → "Kis shehar…?"
+  → "Lahore") gets the out-of-scope reply: each turn is answered from its own parse. (2) Tapping any button (the 3 price
+  buttons, the place-candidate buttons) gets "Echo: received a interactive message": button replies are wired in
+  13.1/14.2.
