@@ -383,6 +383,14 @@ def test_ambiguous_place_asks_with_candidate_buttons_and_is_not_stored(conn, gw)
     assert "place" not in state and state["crop"]["value"] == "ONION"  # only RESOLVED slots become state
 
 
+def test_unknown_place_says_maloomat_nahi_and_missing_place_only_asks(conn, gw):
+    handlers.handle_turn(conn, seed_turn(conn, "Chak Jhumra mandi mein pyaz ka rate"))  # a place named, not found
+    handlers.handle_turn(conn, seed_turn(conn, "Bhalwal mein aloo ka rate"))             # no place span found
+    assert gw.sends == [(NUMBER, render.clarify("place", "ru", unknown_place=True).text),
+                        (NUMBER, render.clarify("place", "ru").text)]
+    assert gw.sends[0][1].startswith("Is jagah ki maloomat mere paas nahi.")  # file 03 §4.3, D-045
+
+
 @pytest.mark.parametrize("text, reply", [
     ("Hyderabad mein pyaz ka rate", render.out_of_coverage("ru")),        # outside Punjab
     ("Multan mein kapaas ka bhaao", render.out_of_coverage("ru")),        # crop not covered

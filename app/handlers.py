@@ -184,7 +184,8 @@ def _facts(conn, parsed: dict, lang: str, now: datetime) -> tuple[render.Reply, 
     if outcome == "CLARIFY":
         slot, place = parsed["clarify_slot"], parsed["slots"]["place"]
         cands = list(resolve_place(place["raw"]).ids) if slot == "place" and place and place["status"] == "AMBIGUOUS" else None
-        return render.clarify(slot, lang, cands), set(cands or ())
+        unknown = slot == "place" and place is not None and place["status"] == "UNKNOWN"  # named but not found (D-045)
+        return render.clarify(slot, lang, cands, unknown_place=unknown), set(cands or ())
     if intent == "HELP":
         return render.help_text(lang), set()
     if intent == "PRICE_NOW":
