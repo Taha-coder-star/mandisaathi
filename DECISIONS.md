@@ -473,7 +473,7 @@ Lockbox `holdout` sealed (docs/lockbox_procedure.md). Nobody has run a model on 
 Lockbox `holdout_null` sealed (docs/lockbox_procedure.md). Nobody has run a model on it.
 - lockbox holdout_null sha256 34624bc1b40ead9ed4d0f3657787c2db9464d4b6d7eca6a035cf675c96776ade
 
-## D-041 · 2026-11-28 · Taha · PROPOSED (awaiting supervisor review)
+## D-041 · 2026-11-28 · Taha · CONFIRMED (supervisor reviewed and approved 2026-11-28, see D-048; 8.3 DONE)
 Task 8.3 `params/ps_v1.yaml` draft (thresholds, costs, S1–S5, valid-null wording), `tests/test_ps_v1.py`. Sources: file 03 §6 + §9 (A1), file 04 §1.2/§1.4/§2/§3, file 05 §5, file 06 §4–5, file 09 R-08/R-11/R-12/R-15/R-16, file 10 §6.
 - **Reviewer (deviation, as D-011):** file 11 says "reviewed by all three members"; I work alone, so the supervisor reviews. **8.3 is DONE only when the supervisor has reviewed it**; the date and any change requests go here. The file must be final before the G2 tag (10.3, Fri 4 Dec).
 - **For the reviewer: values the plan does not give (`NEEDS_REVIEW` in the file):**
@@ -492,6 +492,7 @@ Task 8.3 `params/ps_v1.yaml` draft (thresholds, costs, S1–S5, valid-null wordi
 - **No code reads the new blocks yet.** `tests/test_ps_v1.py` keeps the constants already in `mandi/price.py`, `mandi/ingest/qc.py` and `mandi/resolve.py` equal to ps_v1 (a changed value fails it). The F2 engine (12.x) and alerts (15.x) read their blocks when built.
 - `f1_eval` is unchanged: `python -m scripts.score_e2` reproduces `results/E2.csv` byte for byte (sha256 a8b7af9b…, as D-033).
 - Evidence: local 633 passed, 0 skipped with Postgres 16; ruff clean.
+- **Supervisor review (2026-11-28, reported by Ashna):** approved as written, no change requested. The four NEEDS_REVIEW values (transport PKR/km, fees PKR 50 per 100 kg, alert budget 100/day, S5) are approved as FYP-I placeholders, to be revised in ps_v2 after the R7 trader interviews. 8.3 DONE; the file is final for the G2 tag (10.3).
 
 ## D-042 · 2026-11-28 · Taha · PROPOSED (my row check pending)
 Task 8.4 literature review (`docs/lit_review.md`). File 11 DONE: "15 annotated papers; comparison table incl. Namal FYP and Zarai Mandi".
@@ -563,3 +564,15 @@ Second-annotator change to D-044 rule 2, from the multi-turn proofread. Only `M-
 - **Voice spelling (V16, V22, V30):** the Punjabi word for onion is written as spelled, `gandha` / `گنڈھا` (was `ganda` / `گنڈا`), in `gold_transcript` and the crop `raw`. The bot must still understand every spelling: `گنڈھا` added to the ONION aliases in `mandi/gazetteer.yaml` (ganda, gandha, گنڈا already there) and to `tests/fixtures/alias_cases.csv`. `results/D9` regenerated (`python -m scripts.score_parser`): scores unchanged, V30 still the only field miss. If a speaker says it differently, the transcript follows what was said (SPEC §2.2).
 - **Unknown place says so (V30, T-AMB-03):** gold unchanged (`CLARIFY` `place`), but the reply now follows file 03 §4.3 "nothing found → say so and list how to send a pin": `render.clarify("place", lang, unknown_place=True)` → "Is jagah ki maloomat mere paas nahi. Qareebi mandi ka naam likhein ya location bhejein." A missing place (V29) still only asks. **Left for 10.1:** pass `unknown_place=True` when the parsed place has `status` `UNKNOWN`. The farmer's place text is not echoed (no raw user text in a template).
 - Evidence: local pytest 643 passed, 0 skipped (Postgres 16); ruff clean.
+
+## D-048 · 2026-11-28 · Ashna · CONFIRMED (gate G1 passed, task 10.2 DONE; supervisor approved 2026-11-28)
+File 11 task 10.2: "Gate G1: realism check passed; crop list frozen; real-data format request acknowledged or chased". DONE = G1 recorded here. IDs: D-044/D-045 are on `main`, D-046 is reserved for the 9.4 freeze hash and D-047 is 10.1 (PR #54), so this is D-048; next free ID after it: D-049.
+- **Realism check: PASSED** (task 9.2, D-043): QC recall 100%, no yearly median above `env high`, seasonal troughs equal the spec for every crop, 12 eligible mandis per crop (demo needs ≥ 5).
+- **E1 pass rule, team decision 2026-11-28:** only a yearly median **above** `env high` fails. A median below `env low` is accepted: the envelope is built from Lahore official **retail** prices (spec `plausibility`, an upper-side reference) and mandi prices are wholesale, so they are usually lower. Tomato is below `env low` in 7 of 10 years, by at most 5.0% (2025: median Rs 4,349 per mann vs envelope Rs 4,400–8,000 per mann). Spec, seed and data unchanged.
+- **Crop list FROZEN for FYP-I:** ONION, TOMATO, POTATO daily (price now, F1, F2); WHEAT monthly (F3 outlook only). The coverage gate keeps the thin mandis Jhang, Dera Ghazi Khan and Rahim Yar Khan out of F1/F2 (D-043). Locked by `tests/test_crop_list.py` (synthetic spec crops + wheat monthly + the gazetteer's covered set). A change after G1 needs a new decision, a regenerated synthetic world and resealed lockboxes (D-039/D-040).
+- **Real-data format request: acknowledged** by the co-supervisor (D-043, D-008). FYP-I stays synthetic (A1).
+- **Asked of the supervisor (message drafted 2026-11-28, sent by the project owner):** (1) confirm the E1 rule above; (2) confirm the crop list; (3) review `params/ps_v1.yaml` (D-041) and approve its four NEEDS_REVIEW values (transport PKR/km, fees PKR 50 per 100 kg, alert budget 100/day, S5) as FYP-I placeholders, to be revised in ps_v2 after the R7 trader interviews, flagging any change before Fri 4 Dec.
+  - Fallback if (1) is questioned: accept a yearly median at most 5% below `env low` (fits the data as it is, nothing rebuilt). Only if that is rejected too: raise the tomato base and regenerate + reseal (days of work, G2 at risk).
+  - Fallback if a crop is to be added: add it in FYP-II with the real data, not FYP-I.
+- **Supervisor answer (2026-11-28, reported by Ashna):** approved all three as asked, no change requested: (1) the E1 rule, only a yearly median above `env high` fails; (2) the crop list; (3) `ps_v1` with its four values as FYP-I placeholders (D-041 CONFIRMED). **Gate G1 passed.**
+- Evidence: `pytest tests/test_crop_list.py` 2 passed; `python -m scripts.e1_realism` result as in D-043.

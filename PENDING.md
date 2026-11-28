@@ -1,10 +1,10 @@
 # What is missing (open items)
 
 Last updated: Sat 28 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-046). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-049; D-046 is reserved for the 9.4 freeze hash, D-047 is 10.1 on PR #54). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 ps_v1 draft written (D-041), **awaiting supervisor review** (= DONE). Day 9: 9.1 renderer + validator DONE (D-037); 9.2 E1 final + crop list proposal DONE (D-043, realism PASSED); 9.3 lockbox rehearsal sealed (D-038–D-040; folders in `D:/fyp/data/lockbox/`, back them up outside the repo, never open before the witnessed rehearsal).
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 ps_v1 DONE (D-041, supervisor approved 2026-11-28). Day 10: 10.2 gate G1 passed (D-048, supervisor approved 2026-11-28; crop list frozen). Day 9: 9.1 renderer + validator DONE (D-037); 9.2 E1 final + crop list proposal DONE (D-043, realism PASSED); 9.3 lockbox rehearsal sealed (D-038–D-040; folders in `D:/fyp/data/lockbox/`, back them up outside the repo, never open before the witnessed rehearsal).
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 0. Task 9.4 benchmark freeze: what is left (checklist, in order)
@@ -107,7 +107,6 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 | 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003, 004 and 005). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Benchmark hash + freeze (9.4, D-046) | Day 10 | Proofread DONE (Ashna, 2026-11-28, D-045: text, voice, multi-turn). Left: the 6.4 recordings, then a benchmark hash command, freeze, and record the hash as D-046. |
 | 8.4 lit review: check ≥ 15 rows myself (D-042) | 8.4 DONE; before 18.1 | Open `docs/lit_review.md`; for each row read the abstract (link in `Cite check`), fix the annotation if needed, set `Read` to `abstract`/`full`. Check row 14's "10–16%" figure first. |
-| G1 record (task 10.2) | Fri 4 Dec | All three G1 inputs are in D-043 (realism PASSED, crop list proposed, real-data request acknowledged). At 10.2: freeze the crop list, ask the supervisor to confirm the E1 pass rule (below the retail low edge is not a failure), write the G1 entry. |
 | AWS credit end date (D-009) | — | Check Billing → Credits; fallback Oracle Always-Free. |
 | D-002 user-agent contact email | FYP-II only | Choose before any AMIS fetching. |
 
