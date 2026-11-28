@@ -266,8 +266,9 @@ def join(replies: list[Reply]) -> Reply:
 
 
 # --- reply language (10.1, D-047) -------------------------------------------------------------------------------------
-# One fixed rule, not tuned on the benchmark: Urdu script -> ur; any Roman Urdu function word -> ru; an English word and
-# no Roman Urdu -> en; otherwise ru (most farmers write Roman Urdu, file 10 scenario 1).
+# One fixed rule, not tuned on the benchmark: Urdu script -> ur; any Roman Urdu function word or Roman crop alias of the
+# gazetteer (pyaz, aloo, kanak ...) -> ru; an English word and no Roman Urdu -> en; otherwise ru (most farmers write
+# Roman Urdu, file 10 scenario 1).
 _ARABIC = re.compile(r"[؀-ۿ]")
 _RU_WORDS = frozenset("""mein main ka ki ke kya hai hain hy se ko aur kahan kidhar kitna kitne kab batao bata bataen
     bataein dikhao chahiye karo kro karna kar wala wali wale nahi nahin haan ji bhai mera meri mere paas agle aaj kal
@@ -276,11 +277,16 @@ _EN_WORDS = frozenset("""the in for what is are of to my me i where should sell 
     next week when tell show how much please help hello hi""".split())
 
 
+@functools.cache
+def _ru_crop_words() -> frozenset[str]:
+    return frozenset(a for c in _crops().values() for group in c["aliases"].values() for a in group if a.isascii())
+
+
 def pick_lang(text: str) -> str:
     if _ARABIC.search(text):
         return "ur"
     words = set(re.findall(r"[a-z]+", text.casefold()))
-    if words & _RU_WORDS:
+    if words & (_RU_WORDS | _ru_crop_words()):
         return "ru"
     return "en" if words & _EN_WORDS else "ru"
 

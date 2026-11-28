@@ -112,6 +112,7 @@ def every_template(lang):
 
 @pytest.mark.parametrize("text, lang", [
     ("aloo ka rate", "ru"), ("pyaz", "ru"), ("Okara se pyaz kahan bechun", "ru"), ("help chahiye", "ru"),
+    ("pyaz rate Lahore", "ru"), ("tamatar today", "ru"),  # a Roman crop alias is Roman Urdu
     ("potato price in Sahiwal", "en"), ("help", "en"), ("where should I sell", "en"),
     ("آلو کا ریٹ", "ur"), ("Lahore آلو", "ur"),
 ])
