@@ -27,24 +27,13 @@ from psycopg.types.json import Jsonb
 
 from app import crypto, gateway, speech
 from app import state as qstate
+from app.render import CONSENT_TEXT, STOP_TEXT  # noqa: F401  (tests read them as handlers.*)
 from mandi.parse import STOP_WORDS  # single source of truth for the stop keywords (task 7.1, handoff §3.2)
 
 log = logging.getLogger(__name__)
 
 CONSENT_SEQ, REPLY_SEQ = 0, 1  # fixed per turn, so a re-claimed job finds what it already sent
 
-# Plain strings until the 9.1 renderer owns all reply text. Contents per file 07 §3; no "pakka" (9.1 validator word).
-CONSENT_TEXT = (
-    "MandiSaathi: FAST-NUCES ka student project. Yeh AI assistant hai; rates sirf andaza hain. "
-    "Hum aap ka number (encrypted) aur paighamaat 90 din tak rakhte hain. Band karne ke liye \"STOP\" likhein. "
-    "Demo data (synthetic).\n"
-    "MandiSaathi is an AI assistant from a FAST-NUCES student project. Prices are estimates. "
-    "We keep your number (encrypted) and messages for 90 days. Send STOP to opt out. Demo data (synthetic)."
-)
-STOP_TEXT = (
-    "Aap ka data mita diya gaya hai; ab koi paigham nahi aaye ga. Dobara shuru karne ke liye koi bhi paigham bhejein.\n"
-    "Your data has been deleted and you will get no more messages. Send any message to start again."
-)
 # Meta delivery states, in order; 'pending' (not yet sent) ranks 0 so the first 'sent' advances it. 'failed' is terminal.
 STATUS_RANK = {"pending": 0, "sent": 1, "delivered": 2, "read": 3}
 

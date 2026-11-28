@@ -34,6 +34,12 @@ def _tables() -> dict:
     return {"aliases": aliases, "covered": covered, "places": places}
 
 
+def place_index() -> tuple[dict[str, set[str]], dict[str, tuple]]:
+    """(normalised exact alias -> place ids, place id -> place row) for the 9.1 renderer and validator."""
+    t = _tables()
+    return t["aliases"]["place"], t["places"]
+
+
 def _one(kind: str, target: str, exact: bool) -> Resolution:
     t = _tables()
     if target not in t["covered"][kind]:
