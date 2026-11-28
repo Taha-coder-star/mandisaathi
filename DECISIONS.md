@@ -472,3 +472,23 @@ Lockbox `holdout` sealed (docs/lockbox_procedure.md). Nobody has run a model on 
 ## D-040 · 2026-11-28 · Taha · CONFIRMED
 Lockbox `holdout_null` sealed (docs/lockbox_procedure.md). Nobody has run a model on it.
 - lockbox holdout_null sha256 34624bc1b40ead9ed4d0f3657787c2db9464d4b6d7eca6a035cf675c96776ade
+
+## D-041 · 2026-11-28 · Taha · PROPOSED (awaiting supervisor review)
+Task 8.3 `params/ps_v1.yaml` draft (thresholds, costs, S1–S5, valid-null wording), `tests/test_ps_v1.py`. Sources: file 03 §6 + §9 (A1), file 04 §1.2/§1.4/§2/§3, file 05 §5, file 06 §4–5, file 09 R-08/R-11/R-12/R-15/R-16, file 10 §6.
+- **Reviewer (deviation, as D-011):** file 11 says "reviewed by all three members"; I work alone, so the supervisor reviews. **8.3 is DONE only when the supervisor has reviewed it**; the date and any change requests go here. The file must be final before the G2 tag (10.3, Fri 4 Dec).
+- **For the reviewer: values the plan does not give (`NEEDS_REVIEW` in the file):**
+  - **S5:** the plan names it only as "user-test analysis" (file 11 FYP-II S7–S8) and gate M9 (≥ 10 active participants). Written from those facts only: ≥ 10 active participants over 2 weeks, results reported descriptively with n. Valid null: "farmers in the user test did not use the advice for their selling decisions". Add a measure (e.g. a questionnaire score) now if you want one: S5 is frozen at G2.
+  - **F2 transport:** PKR/km per vehicle (pickup ≤ 25 mann 90, mazda ≤ 125 mann 160, truck ≤ 375 mann 260) at diesel PKR 280/litre. No public source found. Scenario 2's golden numbers depend on them.
+  - **F2 fees:** market + unloading PKR 50 per 100 kg, the same at every mandi (it cancels in the gain over the nearest; it only changes the net total).
+  - **Alerts:** daily template budget 100 (file 06 says "a count in config").
+- **Plan values carried as written (`ASSUMPTION`, R7 trader interviews before ps_v2):** radius 150 km; delay 1 day over 80 km; commission 6% (sensitivity 4–8%); spoilage per day tomato 4%, onion and potato 1%, wheat 0% (sensitivity ×0.5 to ×2); transport sensitivity ±50%; P10 risk rule; top 3.
+- **Criteria:**
+  - S1–S3 are the file 04 rules with file 04's valid-null sentences verbatim. They apply to the real lockbox (FYP-II S8).
+  - The FYP-I claim is `fyp1_pipeline_check` (A1, file 10 §6). The plan's wording is "F1 beats naive on SYN and does not on SYN-NULL; ranges reach nominal coverage". It is made concrete with the S1 rule (pooled MASE upper bound < 1 at h = 1–3), the D-033 sanity rule (no crop × h with a MASE upper bound < 1 on SYN-NULL), coverage 75–85%, and L1–L6. These operational versions are my choice.
+- **S4:** file 10 §6 and file 05 §5 were diffed line by line. They agree on every value both state. S4 is the union:
+  - file 10 adds place resolution 100/100/100 and alerts 0/0;
+  - file 05 adds the gap to paired text ≤ 7 points, script usable ≥ 95%, out-of-scope redirected 100%, correct tool ≥ 95%, and cost ≤ $0.01 per turn (tracked, not gating).
+- **Also recorded:** coverage gate (mandi/price.py), QC rules (D-024), resolver pin radius, F1 quantiles + tuning budget ≤ 30 trials (R-15) + conformal 80% per crop × h, F3 issue leads 3–5 months + no-skill rule, alert anti-spam (re-arm 3%, 1 per subscription and 3 per farmer per day, none from SUSPECT).
+- **No code reads the new blocks yet.** `tests/test_ps_v1.py` keeps the constants already in `mandi/price.py`, `mandi/ingest/qc.py` and `mandi/resolve.py` equal to ps_v1 (a changed value fails it). The F2 engine (12.x) and alerts (15.x) read their blocks when built.
+- `f1_eval` is unchanged: `python -m scripts.score_e2` reproduces `results/E2.csv` byte for byte (sha256 a8b7af9b…, as D-033).
+- Evidence: local 633 passed, 0 skipped with Postgres 16; ruff clean.
