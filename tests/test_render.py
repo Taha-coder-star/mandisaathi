@@ -106,6 +106,23 @@ def every_template(lang):
     yield render.out_of_coverage(lang)
     yield render.out_of_scope(lang)
     yield render.unknown(lang)
+    yield render.help_text(lang)
+    yield render.join([render.price(price(), lang), render.price(None, lang, "POTATO", "LAHORE")])
+
+
+@pytest.mark.parametrize("text, lang", [
+    ("aloo ka rate", "ru"), ("pyaz", "ru"), ("Okara se pyaz kahan bechun", "ru"), ("help chahiye", "ru"),
+    ("potato price in Sahiwal", "en"), ("help", "en"), ("where should I sell", "en"),
+    ("آلو کا ریٹ", "ur"), ("Lahore آلو", "ur"),
+])
+def test_pick_lang(text, lang):
+    assert render.pick_lang(text) == lang
+
+
+def test_join_keeps_blocks_in_order_one_demo_line_first_buttons():
+    a, b = render.price(price(), "ru"), render.price(None, "ru", "POTATO", "LAHORE")
+    j = render.join([a, b])
+    assert j.text.count(SYNTH) == 1 and j.text.index("Pyaz") < j.text.index("Aloo") and j.buttons == a.buttons
 
 
 @pytest.mark.parametrize("lang", render.LANGS)

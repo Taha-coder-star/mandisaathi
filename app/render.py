@@ -250,6 +250,41 @@ def unknown(lang: str) -> Reply:
     return _reply(f"{head} {SCOPE[lang]}")
 
 
+def help_text(lang: str) -> Reply:
+    """HELP: what the bot does, one example question and how to stop (10.1, D-047). No number."""
+    ex = {"ru": 'Maslan likhein: "Lahore mein pyaz ka rate". Band karne ke liye STOP likhein.',
+          "en": 'For example: "onion rate in Lahore". To stop, send STOP.',
+          "ur": 'مثلاً لکھیں: "لاہور میں پیاز کا ریٹ"۔ بند کرنے کے لیے STOP لکھیں۔'}[lang]
+    return _reply(f"{SCOPE[lang]} {ex}")
+
+
+def join(replies: list[Reply]) -> Reply:
+    """Several answers in one message (two crops in one question, T-AMB-06 shape): blocks in order, one demo-data line,
+    the first reply's buttons."""
+    blocks = [r.text.removesuffix(f"\n{SYNTH}") for r in replies]
+    return _reply("\n".join(blocks), replies[0].buttons)
+
+
+# --- reply language (10.1, D-047) -------------------------------------------------------------------------------------
+# One fixed rule, not tuned on the benchmark: Urdu script -> ur; any Roman Urdu function word -> ru; an English word and
+# no Roman Urdu -> en; otherwise ru (most farmers write Roman Urdu, file 10 scenario 1).
+_ARABIC = re.compile(r"[؀-ۿ]")
+_RU_WORDS = frozenset("""mein main ka ki ke kya hai hain hy se ko aur kahan kidhar kitna kitne kab batao bata bataen
+    bataein dikhao chahiye karo kro karna kar wala wali wale nahi nahin haan ji bhai mera meri mere paas agle aaj kal
+    dasso dass kithay""".split())
+_EN_WORDS = frozenset("""the in for what is are of to my me i where should sell price rate rates today tomorrow
+    next week when tell show how much please help hello hi""".split())
+
+
+def pick_lang(text: str) -> str:
+    if _ARABIC.search(text):
+        return "ur"
+    words = set(re.findall(r"[a-z]+", text.casefold()))
+    if words & _RU_WORDS:
+        return "ru"
+    return "en" if words & _EN_WORDS else "ru"
+
+
 # First contact, before the farmer's language is known, so all three languages (file 07 §3). Kept word for word with the
 # live Roman Urdu / English text; the Urdu-script paragraph says the same.
 CONSENT_TEXT = (

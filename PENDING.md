@@ -114,3 +114,23 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 ## 3. Next plan tasks (critical path)
 Day 8 onward per file 11.
 7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 wrote `params/ps_v1.yaml` (D-041; `f1_eval` unchanged); rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). SYN-NULL is for F1 false-skill checks only (D-034): 12.2 (E5) runs on SYN; 11.1 also runs a deliberately leaky model on SYN-NULL, which must beat naive (proves the check still has power). 8.2 left for its consumers (D-036): 12.1 calls `price.refresh_coverage` in the batch, writes `outlier_flag` and flips a SUSPECT row back to OK when the next quote confirms it; 9.1/10.1 use `price.price_now` (stale line when `stale`, `None` → maloomat nahi); 14.3/18.2 pin `as_of` to the S-DEMO day. 9.1 left for 10.1 (D-037): pick the reply language, send `Reply.buttons` with `gateway.send_buttons`, add `message_log.validator_result` and store `compose`'s result, pass the payload's place ids (incl. F2 origin) as `allowed`. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
+
+## 4. Task 10.1 live check (DONE condition; code merged = not DONE)
+File 11: **scenario 1 passes on a team phone on live data, ≤ 7 s.** Code and tests: D-047. Do this after the 10.1 PR is
+merged. It also replaces the "6.2 live check" row in §2 (its expected reply is no longer an echo).
+- [ ] **Deploy on the VM** (`~/mandisaathi`): `git pull`, `sudo docker compose up -d --build`; migrate applies 003–006.
+- [ ] **Data:** check what the bot will answer from:
+  `sudo docker compose exec postgres psql -U mandi -d mandi -c "SELECT market_date, min_pkr100kg, max_pkr100kg,
+  outlier_flag, reported_at FROM price_obs WHERE crop_id='ONION' AND mandi_id='LAHORE' AND source='SYN' ORDER BY
+  market_date DESC LIMIT 3"`. If the newest OK row is older than 2 trading days the reply carries the stale line; if
+  there is none it says "taaza rate abhi maujood nahi". Load/extend the synthetic data first if needed.
+- [ ] **Scenario 1** from a team phone that has never written to the bot (or after STOP): send
+  `Assalam o alaikum, Lahore mein pyaz ka aaj ka rate kya hai?`. Expect: the consent text **once**, then
+  `Pyaz · Lahore · Rs X–Y fi mann (40 kg) · <date> · Demo data (synthetic)` with 3 buttons. X, Y = the newest OK row's
+  min/max × 0.4, rounded half up; the date = its market_date.
+- [ ] **≤ 7 s:** `SELECT i.wa_ts, o.status_at, o.status_at - i.wa_ts FROM inbound_event i JOIN outbound_message o ON
+  o.job_id = i.turn_job_id AND o.seq = 1 ORDER BY i.id DESC LIMIT 1` (after the phone shows the reply).
+- [ ] **No LLM number:** the `message_log` `out` row has `validator_result` = `{"used": "template_only", ...}`.
+- [ ] **STOP** (the 6.2 check): send STOP → confirmation, then `SELECT count(*) FROM wa_user` drops by one.
+- [ ] Record the result (reply text, seconds) in D-047, set it CONFIRMED, tick 10.1 DONE here.
+- **Do not** use a phone that still has 6.4 voice notes waiting to be pulled for the STOP step.
