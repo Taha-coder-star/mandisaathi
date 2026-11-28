@@ -113,3 +113,20 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 ## 3. Next plan tasks (critical path)
 Day 8 onward per file 11.
 7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 wrote `params/ps_v1.yaml` (D-041; `f1_eval` unchanged); rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). SYN-NULL is for F1 false-skill checks only (D-034): 12.2 (E5) runs on SYN; 11.1 also runs a deliberately leaky model on SYN-NULL, which must beat naive (proves the check still has power). 8.2 left for its consumers (D-036): 12.1 calls `price.refresh_coverage` in the batch, writes `outlier_flag` and flips a SUSPECT row back to OK when the next quote confirms it; 9.1/10.1 use `price.price_now` (stale line when `stale`, `None` → maloomat nahi); 14.3/18.2 pin `as_of` to the S-DEMO day. 9.1 left for 10.1 (D-037): pick the reply language, send `Reply.buttons` with `gateway.send_buttons`, add `message_log.validator_result` and store `compose`'s result, pass the payload's place ids (incl. F2 origin) as `allowed`. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
+
+## 5. Task 10.3 gate G2 freeze (Fri 4 Dec): checklist (D-049)
+DONE = git tag `ps_v1` exists and every artefact below is present. **Tag last.**
+| Artefact | State | Left |
+|---|---|---|
+| `ps_v1` final + S1–S5 | done (D-041 CONFIRMED) | merge PR #55 |
+| Lockbox rehearsed | done (D-038–D-040) | — |
+| L1–L6 | pass in CI | — |
+| T6 lockbox hash | CI no-op | owner runs `pytest tests/test_lockbox.py` + `python scripts/lockbox.py verify` where `D:/fyp/data/lockbox/` is; paste output in the freeze PR |
+| T7 (F3 timing) | no test yet | write it in 10.4 (before Fri) |
+| T8 (CPI) | decision: not wired in FYP-I | — |
+| Spec + seed hash | `python -m scripts.freeze_hash` ready | record `- freeze spec sha256 …` on freeze day |
+| Benchmark hash (D-046) | command ready; 10 of 35 notes sent, 0 pulled | all 35 pulled + merged by Thu 3 Dec; then record `- freeze benchmark sha256 …` |
+| Guard test | — | add on freeze day: `freeze_hash.verify()` returns no problems |
+| `git tag -a ps_v1` | — | on the freeze PR's merge commit, then `git push origin ps_v1` |
+
+**Decide by Wed 2 Dec** whether the voice set needs the cut list (file 11 §10) if the recordings will not be pulled by Thu.
