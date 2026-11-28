@@ -1,10 +1,10 @@
 # What is missing (open items)
 
-Last updated: Fri 27 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-036). Remove a line here when it is done, in the same PR.
+Last updated: Sat 28 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
+Decisions: `DECISIONS.md` (next free ID: D-037). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035).
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036).
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done
@@ -57,4 +57,4 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 
 ## 3. Next plan tasks (critical path)
 Day 8 onward per file 11.
-7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 completes `params/ps_v1.yaml` around the DRAFT `f1_eval` block; rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). SYN-NULL is for F1 false-skill checks only (D-034): 12.2 (E5) runs on SYN; 11.1 also runs a deliberately leaky model on SYN-NULL, which must beat naive (proves the check still has power). 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.
+7.3 left for its consumers (D-033): 11.1 (E3) and 12.2 (E5) import `f1eval.folds_for`/`score_rows`, `devdata.price_rows`, `baselines.BASELINES` and `harness.predict_folds` (embargo = h, not D-016's h−1), and add their scripts to the `Makefile` `results` target (G3, 13.4). 8.3 completes `params/ps_v1.yaml` around the DRAFT `f1_eval` block; rerun `make results` after the `ps_v1` tag (E2 is pre-freeze). G3 canonical bytes: record the E2.csv sha256 from the CI runner/VM (D-014). SYN-NULL is for F1 false-skill checks only (D-034): 12.2 (E5) runs on SYN; 11.1 also runs a deliberately leaky model on SYN-NULL, which must beat naive (proves the check still has power). 8.2 left for its consumers (D-036): 12.1 calls `price.refresh_coverage` in the batch, writes `outlier_flag` and flips a SUSPECT row back to OK when the next quote confirms it; 9.1/10.1 use `price.price_now` (stale line when `stale`, `None` → maloomat nahi); 14.3/18.2 pin `as_of` to the S-DEMO day. 7.2 left for its consumers: parser output → state patches and `record_answer` after a ranked send (9.1/10.x/14.2), see D-032.

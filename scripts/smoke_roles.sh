@@ -9,6 +9,7 @@ docker run --rm "$IMG" python -m mandi.batch
 
 echo "== gazetteer in image"
 docker run --rm "$IMG" python -c "from mandi.gazetteer import read, rows; rows(read())"
+docker run --rm "$IMG" python -c "import datetime; from mandi.price import is_trading_day; assert not is_trading_day(datetime.date(2026, 11, 9))"  # spec.yaml calendar (8.2)
 
 echo "== web"
 docker run -d --name smoke-web -p 8000:8000 "$IMG" >/dev/null
