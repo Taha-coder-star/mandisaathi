@@ -235,7 +235,7 @@ Task 5.3 realism check E1 v0 + QC (`mandi/ingest/qc.py`, `scripts/e1_realism.py`
 - **Our addition: robust-SD floor 0.05 log.** Without it a calm window flags normal moves. E1 sweep on SYN (0.02 / 0.03 / 0.04 / 0.05): recall 100% at every floor, FP falls from 2-3% to 0.3-0.7%; 0.05 chosen. The floor does not change recall, so this is not tuning to the injected defects.
 - **"Unit errors" = the per-40 kg rows.** They count as caught when the loader recognises the unit and converts it (100%). A stress row (per-40 kg read as per-100 kg, not injected) shows QC would still flag 99.6% of a silent 2.5x error.
 - **E1 reads only the development period** (before the holdout start 2025-12-19), generated in memory from spec + seed; the holdout year is never looked at. Charts need the new `report` extra (matplotlib), not in the image.
-- **Results:** QC recall 100% on 343 typos, 222 swaps, 6,007 per-40 kg rows (SYN and SYN-NULL, same masks); FP 0.46% SYN, 1.12% SYN-NULL. Seasonal trough month matches the spec for all 3 crops (corr >= 0.98). 12 eligible mandis per crop; the 3 thin mandis sit at 36-49% (below the gate, as designed). **Finding for 9.2:** no yearly median above the envelope high, but tomato is below the envelope low in 7 of 10 years (wholesale vs a retail anchor); review tomato `base_pkr100kg` or the low edge before the G2 freeze.
+- **Results:** QC recall 100% on 343 typos, 222 swaps, 6,007 per-40 kg rows (SYN and SYN-NULL, same masks); FP 0.46% SYN, 1.12% SYN-NULL. Seasonal trough month matches the spec for all 3 crops (corr >= 0.98). 12 eligible mandis per crop; the 3 thin mandis sit at 36-49% (below the gate, as designed). **Finding for 9.2:** no yearly median above the envelope high, but tomato is below the envelope low in 7 of 10 years (wholesale vs a retail anchor); review tomato `base_pkr100kg` or the low edge before the G2 freeze. **Resolved at 9.2 (D-043): spec unchanged; below the retail low edge is not a failure.**
 - DONE evidence: `results/E1/README.md` (4 tables) + `e1_levels.png`, `e1_seasonal.png`, `e1_coverage.png`, `e1_qc.png`; `tests/test_qc.py::test_done_qc_flags_every_injected_defect`. PR #25 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/45650350227 (secrets, test, image green); merged 9589bfb, main CI run 45650662210 green.
 
 ## D-025 · 2026-11-25 · Ashna · CONFIRMED
@@ -514,3 +514,24 @@ Task 8.4 literature review (`docs/lit_review.md`). File 11 DONE: "15 annotated p
   - ref [13] author name (see row 19);
   - Table 1 calls [12] a "deployed field system in Pakistan", which is not confirmed;
   - "Add ≥ 10 domain papers" can now be filled from rows 7–12 and 14–16.
+
+## D-043 · 2026-11-28 · Taha · CONFIRMED (supervisor saw E1, reported by me 2026-11-28)
+Task 9.2 realism check E1 final + crop list proposal (`scripts/e1_realism.py`, `results/E1/README.md` §6, `tests/test_qc.py::test_e1_verdict_fails_above_envelope_but_not_below`). File 11 DONE: "Report committed; G1 inputs ready".
+- **Reproduced, not relabelled:** rerun on main 0803c33 (spec, generator, QC and script unchanged since 5.3, 9589bfb). The tables are identical to the committed E1 v0 (diff ignoring CRLF) and the charts are byte-identical.
+- **E1 pass rule (my wording; the plan says only "inside per-mann ranges", file 03 §9).** All four hold:
+  1. QC recall 100% on injected defects (the 5.3 rule);
+  2. no yearly median above `env high`;
+  3. the observed seasonal trough month equals the spec's for every crop;
+  4. ≥ 5 eligible mandis per crop (file 10 §4).
+  `scripts/e1_realism.py` now exits 1 when any of these fails, not only on QC recall.
+- **Result:** PASSED. QC 100%; no median above env high; troughs 5/5/2 = spec; 12 eligible mandis per crop.
+- **Tomato finding (D-024): spec unchanged.** Tomato is below `env low` in 7 of 10 years, by at most 5.0%. I read it as an observation, not a failure, because the anchor is the Lahore *official retail* price (an upper-side reference by the spec's own comment), and wholesale should sit under retail.
+  - Why not change `base_pkr100kg`: the 9.3 lockbox (D-039/D-040), E2 (D-033) and the L2 numbers were all built on this spec and seed. A change means regenerating and resealing both holdouts and rerunning L2 and `make results`, for a gap of ≤ 5%.
+  - The supervisor is to confirm this reading at G1 (10.2).
+- **Crop list proposal for G1:** onion, tomato and potato (daily: price now, F1, F2) + wheat (monthly, F3 only), as file 03 assumes "until gate G1". Thin mandis excluded by the coverage gate: Jhang, Dera Ghazi Khan, Rahim Yar Khan. E1 does not check wheat (monthly, no sourced anchor); its panel is checked in 10.4. I did not add an unsourced wheat envelope.
+- **Supervisor + real data (reported by me 2026-11-28; meeting date not recorded):**
+  - The supervisor has seen E1 and asked for real data for FYP-II.
+  - The co-supervisor has acknowledged the 23 Nov real-data format request (D-008), so that G1 input is met.
+  - Nothing changes for FYP-I: it stays synthetic (A1, D-008).
+  - **If the real data arrives before FYP-II S1 (even before G2 on 4 Dec):** a format check only, then seal the final 12 months as the real lockbox the same day (`docs/lockbox_procedure.md`). Nobody looks further. G2 requires every freeze to happen "before any real data is seen".
+- Evidence: `python -m scripts.e1_realism` → "QC recall PASS; realism PASSED", exit 0; local pytest 634 passed, 0 skipped (Postgres 16); ruff check clean.

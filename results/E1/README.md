@@ -1,6 +1,6 @@
-# E1 realism check v0: Demo data (synthetic)
+# E1 realism check (final): Demo data (synthetic)
 
-Task 5.3 (file 11). Spec v1, seed 20261124, SYN and SYN-NULL generated in memory by `scripts/make_synthetic.py`. Development period 2016-01-01 to the day before 2025-12-19; the holdout year is not read. Regenerate: `python -m scripts.e1_realism`.
+Task 5.3 (v0), final at task 9.2 (file 11). Spec v1, seed 20261124, SYN and SYN-NULL generated in memory by `scripts/make_synthetic.py`. Development period 2016-01-01 to the day before 2025-12-19; the holdout year is not read. Regenerate: `python -m scripts.e1_realism`.
 No claim about real-market accuracy: this compares the generator with its own spec and the spec's plausibility envelopes. Every number below is Demo data (synthetic).
 
 ## 1. QC recall on injected defects (DONE condition: 100%)
@@ -68,7 +68,7 @@ Envelope = spec `plausibility` anchor (Lahore 2025 retail, an upper-side referen
 | POTATO | 2024 | 3,358 | 2,549 | 3,815 | 3,063 | 5,405 | yes | 8/12 |
 | POTATO | 2025 | 3,602 | 2,695 | 4,079 | 3,400 | 6,000 | yes | 8/12 |
 
-Finding: yearly medians above `env high`: none. Below `env low`: TOMATO 7/10 years; expected for wholesale against a retail anchor, but the low edge (or the crop base level) is for the 9.2 review before the G2 freeze.
+Finding: yearly medians above `env high`: none. Below `env low`: TOMATO 7/10 years (at most 5.0% below). Not a failure: the anchor is Lahore official retail, so wholesale may sit under its low edge (9.2 review, D-043).
 
 Chart: `e1_levels.png`.
 
@@ -113,3 +113,16 @@ Chart: `e1_coverage.png` (mean coverage of the 3 crops per mandi and year).
 ## 5. QC example
 
 Chart: `e1_qc.png`: the series with the most injected typos, one year, injected defects vs flags.
+
+## 6. G1 realism verdict and crop list proposal (task 9.2, D-043)
+
+| criterion | result | pass |
+| --- | --- | --- |
+| QC recall on injected defects = 100% (5.3) | 100% | PASS |
+| No yearly median above `env high` | none above | PASS |
+| Seasonal trough month = spec, every crop | all match | PASS |
+| >= 5 eligible mandis per crop (file 10 §4) | ONION 12, TOMATO 12, POTATO 12 | PASS |
+
+Realism check: **PASSED**.
+
+Crop list proposal for G1: Onion (12 eligible mandis), Tomato (12 eligible mandis), Potato (12 eligible mandis) for price now, F1 and F2; Wheat (monthly) for F3 only. Thin mandis below the coverage gate, so not used for F1/F2: Jhang, Dera Ghazi Khan, Rahim Yar Khan. E1 does not check Wheat: monthly, no plausibility anchor; its panel is checked in task 10.4.

@@ -3,8 +3,9 @@
   python -m scripts.e1_realism [--out results/E1]      (needs the `report` extra for charts: pip install -e .[report])
 
 Generates SYN and SYN-NULL in memory from spec.yaml, keeps only the development period (before the holdout year:
-nobody looks at that year), and writes results/E1/README.md (tables) + 4 charts. Exit code 1 if QC misses any
-injected typo, min>max swap or per-40 kg unit row (the 5.3 DONE condition).
+nobody looks at that year), and writes results/E1/README.md (tables) + 4 charts. Exit code 1 if the G1 realism
+rule fails (`verdict`, task 9.2): QC misses an injected defect, a yearly median sits above the envelope, a seasonal
+trough month is off, or a crop has < 5 eligible mandis.
 """
 import argparse
 import math
@@ -41,6 +42,18 @@ def table(head: list[str], body: list[list]) -> str:
 
 def pct(a: int, b: int) -> str:
     return f"{100 * a / b:.2f}%" if b else "n/a"
+
+
+def verdict(qc_ok: bool, level_plot: dict, season_rows: list[list], eligible: Counter) -> list[list]:
+    """G1 realism rule (task 9.2, D-043): one row per criterion, [criterion, result, passed].
+    Below the envelope's low edge is reported, not failed: the anchor is retail, an upper-side reference."""
+    above = [f"{c} {y}" for c, pts in level_plot.items() for y, med, *_, hi in pts if med > hi]
+    trough = [f"{r[0]} {r[1]} vs {r[2]}" for r in season_rows if r[1] != r[2]]
+    thin = [f"{c} {n}" for c, n in eligible.items() if n < 5]
+    return [["QC recall on injected defects = 100% (5.3)", "100%" if qc_ok else "below 100%", qc_ok],
+            ["No yearly median above `env high`", ", ".join(above) or "none above", not above],
+            ["Seasonal trough month = spec, every crop", ", ".join(trough) or "all match", not trough],
+            [">= 5 eligible mandis per crop (file 10 §4)", ", ".join(f"{c} {n}" for c, n in eligible.items()), not thin]]
 
 
 def qc_section(variant: str, rows: list[dict]) -> tuple[list[list], bool, list[set[str]]]:
@@ -168,8 +181,13 @@ def main(argv: list[str] | None = None) -> int:
     first_holdout = dev_end.isoformat()
     above = [f"{r[0]} {r[1]}" for r in level_rows if r[7] == "ABOVE"]
     below = Counter(r[0] for r in level_rows if r[7] == "below")
-    md = [f"# E1 realism check v0: {LABEL}", "",
-          f"Task 5.3 (file 11). Spec v{spec['meta']['spec_version']}, seed {spec['meta']['seed']}, "
+    short = {c: max((1 - med / lo for _, med, _, _, lo, _ in level_plot[c] if med < lo), default=0) for c in below}
+    rule = verdict(ok, level_plot, season_rows, eligible)
+    passed = all(r[2] for r in rule)
+    thin = [m["name_en"] for m in mandis.values() if m["thin"]]
+    monthly = [k for k, c in spec["crops"].items() if c.get("frequency") == "monthly"]
+    md = [f"# E1 realism check (final): {LABEL}", "",
+          f"Task 5.3 (v0), final at task 9.2 (file 11). Spec v{spec['meta']['spec_version']}, seed {spec['meta']['seed']}, "
           "SYN and SYN-NULL generated in memory by `scripts/make_synthetic.py`. "
           f"Development period {spec['period']['start']} to the day before {first_holdout}; "
           "the holdout year is not read. Regenerate: `python -m scripts.e1_realism`.",
@@ -189,8 +207,8 @@ def main(argv: list[str] | None = None) -> int:
           "Wholesale should sit at or below `env high`. Early-year envelopes are deflated, not sourced (spec: UNVERIFIED).", "",
           table(["crop", "year", "median", "p10", "p90", "env low", "env high", "median inside", "months inside"], level_rows), "",
           f"Finding: yearly medians above `env high`: {', '.join(above) or 'none'}. Below `env low`: "
-          f"{', '.join(f'{c} {n}/{len(years)} years' for c, n in below.items()) or 'none'}; expected for wholesale against a "
-          "retail anchor, but the low edge (or the crop base level) is for the 9.2 review before the G2 freeze.", "",
+          f"{', '.join(f'{c} {n}/{len(years)} years (at most {100 * short[c]:.1f}% below)' for c, n in below.items()) or 'none'}. "
+          "Not a failure: the anchor is Lahore official retail, so wholesale may sit under its low edge (9.2 review, D-043).", "",
           "Chart: `e1_levels.png`.", "",
           "## 3. Seasonal shape per crop", "",
           "Observed = mean of detrended log price by calendar month (each mandi-year de-meaned); spec = the spec `dips` curve.",
@@ -203,11 +221,21 @@ def main(argv: list[str] | None = None) -> int:
           "Eligible mandis per crop: " + ", ".join(f"{c} {eligible[c]}" for c in crops) + " (demo needs >= 5, file 10 §4).", "",
           "Chart: `e1_coverage.png` (mean coverage of the 3 crops per mandi and year).", "",
           "## 5. QC example", "",
-          "Chart: `e1_qc.png`: the series with the most injected typos, one year, injected defects vs flags.", ""]
+          "Chart: `e1_qc.png`: the series with the most injected typos, one year, injected defects vs flags.", "",
+          "## 6. G1 realism verdict and crop list proposal (task 9.2, D-043)", "",
+          table(["criterion", "result", "pass"], [[k, v, "PASS" if p else "FAIL"] for k, v, p in rule]), "",
+          f"Realism check: **{'PASSED' if passed else 'FAILED'}**.", "",
+          "Crop list proposal for G1: "
+          + ", ".join(f"{spec['crops'][c]['name_en']} ({eligible[c]} eligible mandis)" for c in crops)
+          + " for price now, F1 and F2"
+          + "".join(f"; {spec['crops'][c]['name_en']} (monthly) for F3 only" for c in monthly) + ". "
+          + f"Thin mandis below the coverage gate, so not used for F1/F2: {', '.join(thin)}."
+          + "".join(f" E1 does not check {spec['crops'][c]['name_en']}: monthly, no plausibility anchor; "
+                    "its panel is checked in task 10.4." for c in monthly), ""]
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "README.md").write_text("\n".join(md), encoding="utf-8", newline="\n")
-    print(f"E1 written to {a.out}; QC recall {'PASS' if ok else 'FAIL'}")
-    return 0 if ok else 1
+    print(f"E1 written to {a.out}; QC recall {'PASS' if ok else 'FAIL'}; realism {'PASSED' if passed else 'FAILED'}")
+    return 0 if passed else 1
 
 
 def charts(out: Path, crops, mandis, level_plot, season_plot, heat, yrs, syn, flags) -> None:
