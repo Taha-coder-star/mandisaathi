@@ -16,7 +16,7 @@ crops:
     aliases:
       COMMON: [pyaz]
       MISSPELLING: [piaz, payaz, pyaaz, piyaz]
-      PUNJABI: [ganda, gandha, "گنڈا"]            # BELIEF · VERIFY (file 03 §4.2)
+      PUNJABI: [ganda, gandha, "گنڈا", "گنڈھا"]    # BELIEF · VERIFY (file 03 §4.2); گنڈھا = correct spelling (D-045)
       VOICE_STT: [piyaaz, pyaj, "प्याज"]
   TOMATO:
     name_en: Tomato

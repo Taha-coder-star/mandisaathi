@@ -47,7 +47,7 @@ CASES = {
     "T-UR-01": "Urdu-script spans + Urdu 'ریٹ' intent trigger",
     "T-UR-03": "Urdu-script sell verb 'بیچوں' -> WHERE_TO_SELL",
     "T-RU-06": "number word 'sau'",
-    "V16": "Punjabi crop 'ganda' (voice transcript)",
+    "V16": "Punjabi crop 'gandha' (voice transcript)",
 }
 
 

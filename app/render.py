@@ -195,12 +195,18 @@ def where_to_sell(w: dict, lang: str) -> Reply:
     return _reply("\n".join(lines) + f" · {SYNTH}", _buttons("f2", lang))
 
 
-def clarify(slot: str, lang: str, candidates: list[str] | None = None) -> Reply:
-    """One question for the first missing slot (parser clarify_slot): crop, place (candidates = AMBIGUOUS place ids),
-    quantity, quantity_unit ('bori' without weight), horizon."""
+def clarify(slot: str, lang: str, candidates: list[str] | None = None, unknown_place: bool = False) -> Reply:
+    """One question for the first missing slot (parser clarify_slot): crop, place (candidates = AMBIGUOUS place ids;
+    unknown_place = a place was named but not found, status UNKNOWN), quantity, quantity_unit ('bori' without weight),
+    horizon."""
     if slot == "place" and candidates:
         q = {"ru": "Kaunsi jagah?", "en": "Which place?", "ur": "کون سی جگہ؟"}[lang]
         return _reply(q, [{"id": f"PLACE:{p}", "title": place_name(p, lang)} for p in candidates[:3]])
+    if slot == "place" and unknown_place:  # file 03 §4.3: nothing found -> say so, then how to send a pin (D-045)
+        q = {"ru": "Is jagah ki maloomat mere paas nahi. Qareebi mandi ka naam likhein ya location bhejein.",
+             "en": "I don't have information about this place. Type the nearest mandi's name or send your location.",
+             "ur": "اس جگہ کی معلومات میرے پاس نہیں۔ قریبی منڈی کا نام لکھیں یا لوکیشن بھیجیں۔"}[lang]
+        return _reply(q)
     if slot == "crop":
         crops = [c for c, v in _crops().items() if v["covered"]]
         q = {"ru": "Kaunsi fasal?", "en": "Which crop?", "ur": "کون سی فصل؟"}[lang]
