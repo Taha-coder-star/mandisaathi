@@ -420,4 +420,39 @@ Task 8.2 price service (RFC C8) + series_coverage refresh: `mandi/price.py`, `te
 - **SUSPECT "until the next day confirms them" (file 03 §6):** the price service only reads the flag. Turning a SUSPECT row back to OK when the next quote agrees belongs where the flag is written (batch, 12.1, D-024). Until then a real level jump stays SUSPECT and the rate goes stale; QC's false-positive rate is 0.46% on SYN (D-024).
 - **Not in 8.2:** calling `refresh_coverage` from `mandi/batch.py` and writing `outlier_flag` (12.1); the answer-time coverage-gate check and "andaza nahi" (C9, 13.1); batch-failure staleness from `data_health` (C13, 12.1); multiple grades per series-day in real data (FYP-II: the newest row wins today).
 - **For S-DEMO (14.3/18.2):** replies must use the snapshot's clock (`as_of` pinned to the S-DEMO day), otherwise on 21–23 Dec an 11 Dec snapshot is stale and every series fails the 3-trading-day rule.
-- DONE evidence: `tests/test_price.py::test_done_suspect_and_rejected_rows_are_skipped`, `::test_done_stale_after_two_trading_days`, `::test_done_eligibility_sixty_percent_and_recent_quote`. Local 606 passed, 0 skipped with Postgres 16; ruff clean; `smoke_roles.sh` green on the new image.
+- DONE evidence: `tests/test_price.py::test_done_suspect_and_rejected_rows_are_skipped`, `::test_done_stale_after_two_trading_days`, `::test_done_eligibility_sixty_percent_and_recent_quote`. Local 606 passed, 0 skipped with Postgres 16; ruff clean; `smoke_roles.sh` green on the new image. PR #46 CI run https://github.com/Taha-coder-star/mandisaathi/actions/runs/46104284868 (secrets, test, image green); merged 939c66c, main CI 46104412560 green.
+
+## D-037 · 2026-11-28 · Taha · CONFIRMED (automated)
+Task 9.1 renderer + grounding validator (RFC C11): `app/render.py`, `tests/test_render.py`. Sources: file 06 §2, file 09 R-05/R-06, file 10 scenarios 1–5, RFC §6. Where the plan is silent, these are our choices:
+- **Templates** (Roman Urdu `ru`, Urdu script `ur`, English `en`) return `Reply(text, buttons)`:
+  - `price` (8.2 `Price`, or `None` → no-rate line); `forecast` (F1); `no_forecast` (coverage gate closed: "data kaafi nahi" + latest rate, scenario 5e); `where_to_sell` (F2); `clarify` (crop / place / AMBIGUOUS place candidates / quantity / bori weight / horizon); `out_of_coverage` (5a/5b); `out_of_scope` (5d); `unknown` ("ye maloomat mere paas nahi"); consent and STOP text.
+  - The scenario 1 line follows file 10, not file 06's AMIS example: `Pyaz · Lahore · Rs 2,850–3,000 fi mann (40 kg) · 11 Dec · Demo data (synthetic)`.
+  - Every reply contains "Demo data (synthetic)" (A1); a sweep test checks this, along with the WhatsApp limits (≤ 3 buttons, title ≤ 20, body ≤ 1,024 with buttons / 4,096 text), for every template × language.
+- **Numbers:**
+  - `per_mann()` = PKR/100 kg × 0.4, whole rupees, half up. It is public so `expected_answers.py` uses the same rounding.
+  - Pakistani grouping (`1,47,000`).
+  - Dates are "11 Dec" (Urdu month names in `ur`).
+  - The price line uses min–max; if either is missing, the one known value (avg first).
+- **Provisional payload shapes (11.2/11.3 may rename fields; the templates follow):**
+  - F1 = a `forecast` row + `h` (`crop_id, mandi_id, h, p10, p50, p90, reasons[]`).
+  - F2 = RFC §6 top-3 `{mandi_id, p10, p90, net, gain_vs_nearest}` + `origin_id, quantity_mann, nearest_id, transport_per_mann, km, commission_pct, run_id`. The "Nazdeeki mandi theek hai" line is shown when the nearest mandi is on top.
+  - F1 reason codes (`ARRIVALS_HIGH/LOW, SEASON_LOW, RECENT_RISE/FALL`) are placeholders until C9 fixes the list. An unknown code is dropped, never guessed.
+- **Out-of-coverage wording:** one message for crop and place, built from the gazetteer `covered` flag: "Abhi sirf Punjab ki mandiyan aur pyaz, tamatar aur aloo." Wheat is left out because it is `covered: false` (file 06's example lists gandum).
+- **Validator (LLM framing text only, never the facts block):**
+  - **DIGIT:** any digit, including Urdu and Arabic-Indic.
+  - **NUMBER_WORD:** every token that `normalise.number` reads as a number (the parser's own normaliser, R-06), plus small English and Urdu-script number lists. Consequence: everyday "do"/"so"/"ek" are rejected too, as R-06 asks; the cost is a regeneration or the template-only reply, never a wrong number.
+  - **PROMISE:** whole tokens/phrases zaroor, pakka, guarantee, munafa hoga, yaqeenan, definitely, promise… and Urdu script, so "zaroorat" passes.
+  - **UNKNOWN_PLACE:** an exact gazetteer place alias (1–4 tokens, no fuzzy matching) that is not among the payload's place/mandi ids. The caller includes the F2 origin.
+  - **NOT_ONE_SENTENCE:** a newline, or more than 200 characters.
+- **`compose(facts, framing, allowed)`:**
+  - Calls `framing(None)`. On rejection it calls `framing(reasons)` once more. After that it sends the template alone.
+  - An exception, an empty answer, or a framing too long to fit next to the facts also falls back to template-only.
+  - It never raises, and returns a JSON `validator_result` (`used: llm|template_only`, attempts with text and reasons).
+- **Consent:** now owned by the renderer (`handlers.CONSENT_TEXT` still imports it). An Urdu-script paragraph was added that says the same as the live Roman Urdu / English text.
+- **Not in 9.1 (owner 10.1):**
+  - choosing the reply language;
+  - sending buttons (`gateway.send_buttons`);
+  - the `message_log.validator_result` column + writing it;
+  - the real LLM framing call (C5);
+  - plausibility band on rendered values (R-09).
+- DONE evidence: `tests/test_render.py::test_done_rejected_twice_then_template_only_is_sent`. It is parametrized over the four DONE cases: injected wrong number "Rs 3,100", "teen hazaar", unknown mandi "Multan", "pakka". Each is rejected twice, and the reply equals the template-only `Reply` byte for byte. Local 629 passed, 0 skipped with Postgres 16; ruff clean.
