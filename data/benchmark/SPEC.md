@@ -103,15 +103,29 @@ A speaker who departs from the line: edit `gold_transcript` (and gold, if the me
      "place": {"canonical": "OKARA", "role": "ORIGIN"}, "quantity_kg": 2000, "horizon": null}}],
  "input": "aur tamatar?",
  "gold": {
-   "patch": [{"slot": "crop", "op": "set", "raw": "tamatar", "id": "TOMATO"}],
+   "patch": [{"slot": "crop", "op": "set", "raw": "tamatar", "value": "TOMATO"}],
    "state_after": {"intent": "WHERE_TO_SELL", "crop": "TOMATO",
      "place": {"canonical": "OKARA", "role": "ORIGIN"}, "quantity_kg": 2000, "horizon": null},
    "tool": {"name": "best_mandis", "args": {"crop": "TOMATO", "origin": "OKARA", "quantity_kg": 2000}},
    "outcome": "ANSWER", "clarify_slot": null}}
 ```
 `op`: `set`, `add` ("Lahore ka bhi"), `ref` (list position, `"position": 2`), `correct`. For `REFERENCE` items the
-context's last turn lists the mandis in order, so position N is checkable. Commands use the same shape with
-`intent = ALERT|STOP` and `alert_action`.
+context's last turn lists the mandis in order (`bot_shown`), so position N is checkable. Commands use the same shape with
+`intent = ALERT|STOP` and `alert_action`. `multiturn.jsonl` is checked by `tests/test_benchmark_multiturn.py`, which
+replays every item through `app.state.apply` (D-032).
+
+Labelling rules for multi-turn and command items (9.4, D-044; binding for 15.3):
+- Patches use `value` (7.2 generalised the `id` of the first draft); a place value is `{canonical, status, role, mandi_ids}`.
+  `gold.intent` is the intent of this turn; `state_after.intent` is the stored intent after the patches.
+- `ref` changes no state (D-032); the tool call uses the mandi at that position. A detail request ("2 number wali ki
+  tafseel") is `PRICE_NOW`; with a horizon ("... ka agle hafte ka andaza") it is `FORECAST` and only the horizon patch
+  changes the state (file 10 scenario 3b).
+- `add` ("Lahore ka bhi"): `state_after.place.canonical` stays the first place; `tool` is a list, one call per place in order.
+- `correct` to a `BORI` or unit-less quantity → `CLARIFY` `quantity_unit`, `quantity_kg` null (never assume the bag weight).
+- Alert threshold is not a state slot: no patch for it, the threshold sits in `tool.args` (PKR per mann as typed) and the
+  farmer's alert direction must be in the message. `alert_action` is `SUBSCRIBE` for a new alert and `SET_THRESHOLD` when the
+  context already holds one; crop and place of a threshold change come from the state.
+- `ALERT` + `LIST` → tool `list_alerts` with `{}`. `STOP` → tool `stop`, state after = all null (the state is deleted).
 
 ### 2.5 Labelling rules (4.4)
 Binding for 6.4, 7.1 and 15.3 (D-020); change them before the 9.4 freeze if wrong. Checked by
@@ -125,6 +139,7 @@ Binding for 6.4, 7.1 and 15.3 (D-020); change them before the 9.4 freeze if wron
 | `OUTLOOK` | `get_outlook` | `crop`, `month` (+ `mandi` if a place is given) |
 | `ALERT` | `set_alert` | `crop`, `mandi`, `direction` (`ABOVE`/`BELOW`), `threshold` (PKR per mann) |
 | `STOP` | `stop` | none (`{}`) |
+| `ALERT` (`alert_action` LIST) | `list_alerts` | none (`{}`) |
 | `HELP`, `OTHER` | no tool (`null`) | |
 
 - `tool` is `null` whenever `outcome` ≠ `ANSWER`. Each arg equals its slot (`crop.id`, `place.canonical`,
