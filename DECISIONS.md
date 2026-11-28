@@ -456,3 +456,19 @@ Task 9.1 renderer + grounding validator (RFC C11): `app/render.py`, `tests/test_
   - the real LLM framing call (C5);
   - plausibility band on rendered values (R-09).
 - DONE evidence: `tests/test_render.py::test_done_rejected_twice_then_template_only_is_sent`. It is parametrized over the four DONE cases: injected wrong number "Rs 3,100", "teen hazaar", unknown mandi "Multan", "pakka". Each is rejected twice, and the reply equals the template-only `Reply` byte for byte. Local 629 passed, 0 skipped with Postgres 16; ruff clean.
+
+## D-038 · 2026-11-28 · Taha · CONFIRMED
+Task 9.3 lockbox rehearsal (`scripts/lockbox.py holdout`, `tests/test_lockbox.py`; procedure `docs/lockbox_procedure.md`, D-012, D-014). Choices where the plan is silent:
+- **Content:** the spec's holdout year 2025-12-19 → 2026-12-18 generated from the same spec + seed (rows equal the tail of `syn.csv` / `syn_null.csv`). `holdout/` = `syn.csv` + `wheat_monthly.csv` (the 12 months that start inside the holdout year, Jan–Dec 2026, for F3); `holdout_null/` = `syn_null.csv` (SYN-NULL has no wheat). Two folders so each is sealed and opened on its own (D-014: "seal the SYN-NULL variant" = its holdout year).
+- **Folder:** `data/lockbox/<name>/` per the procedure (rule 1), not spec.yaml's older `data/synthetic/holdout/` note. Written in the main checkout `D:/fyp/data/lockbox/` (git-ignored), never in a task worktree. Only row counts were looked at before sealing (rule 3).
+- **Read-guard:** the generator call lives in `scripts/lockbox.py`, already the one allowed file, so `ALLOWED` in the test is unchanged. The full `syn.csv` still contains the holdout year; development code drops it at `dev_end` (D-033), as before.
+- **Hash portability (D-014):** the files were generated on Windows (numpy as in `.venv`). A rebuild elsewhere may differ in a rare last digit, so `verify` checks the sealed folder itself, never a rebuild.
+- DONE evidence: the two seal entries below (hashes); `tests/test_lockbox.py` (read-guard + `test_holdout_writes_only_the_holdout_year_once`) green in CI.
+
+## D-039 · 2026-11-28 · Taha · CONFIRMED
+Lockbox `holdout` sealed (docs/lockbox_procedure.md). Nobody has run a model on it.
+- lockbox holdout sha256 d1a244e7aadeb238f81f781d703cb13eb6895a5f7185363853c98ac1eede7af3
+
+## D-040 · 2026-11-28 · Taha · CONFIRMED
+Lockbox `holdout_null` sealed (docs/lockbox_procedure.md). Nobody has run a model on it.
+- lockbox holdout_null sha256 34624bc1b40ead9ed4d0f3657787c2db9464d4b6d7eca6a035cf675c96776ade

@@ -2,11 +2,13 @@
 
   python scripts/lockbox.py seal <name>    hash data/lockbox/<name>/ and record it in DECISIONS.md
   python scripts/lockbox.py verify [name]  re-hash and compare with DECISIONS.md (exit 1 on mismatch)
+  python scripts/lockbox.py holdout        write the synthetic holdout year (task 9.3), then seal holdout + holdout_null
 
 The only file allowed to name the sealed folder in code; tests/test_lockbox.py fails if any other
 module under app/, mandi/ or scripts/ mentions it.
 """
 import hashlib
+import importlib.util
 import re
 import sys
 from datetime import date
@@ -58,10 +60,42 @@ def verify(name: str | None = None, lockbox: Path = LOCKBOX, decisions: Path = D
     return ok
 
 
+def _generator():
+    """scripts/make_synthetic.py by path: this file runs as a script (scripts/ on sys.path) and is loaded by path in tests."""
+    spec = importlib.util.spec_from_file_location("make_synthetic", ROOT / "scripts" / "make_synthetic.py")
+    ms = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ms)
+    return ms
+
+
+def write_holdout(lockbox: Path = LOCKBOX) -> dict[str, int]:
+    """Task 9.3 rehearsal: the spec's holdout year from the same seed, SYN (+ the wheat months) in `holdout/` and
+    SYN-NULL in `holdout_null/`. Written once (an existing folder is refused). Returns row counts per file: the only
+    look allowed before sealing (procedure rule 3)."""
+    ms = _generator()
+    spec = ms.load_spec()
+    start, end = spec["period"]["holdout"]["start"], spec["period"]["holdout"]["end"]
+    counts = {}
+    for name, variant in (("holdout", "SYN"), ("holdout_null", "SYN-NULL")):
+        folder = lockbox / name
+        if folder.exists():
+            raise SystemExit(f"{folder} exists: a lockbox folder is written once")
+        files = {ms.FILES[variant]: [r for r in ms.generate(spec, variant) if start <= date.fromisoformat(r["market_date"]) <= end]}
+        if variant == "SYN":  # F3 panel: the months that start inside the holdout year
+            files["wheat_monthly.csv"] = [r for r in ms.wheat_monthly(spec) if start <= date.fromisoformat(r["month"]) <= end]
+        for fname, rows in files.items():
+            ms.write_csv(rows, folder / fname)
+            counts[f"{name}/{fname}"] = len(rows)
+    return counts
+
+
 if __name__ == "__main__":
     cmd, *args = sys.argv[1:] or ["help"]
     if cmd == "seal" and len(args) == 1:
         print(f"sealed {args[0]}: {seal(args[0])}")
+    elif cmd == "holdout" and not args:
+        for f, n in write_holdout().items():
+            print(f"{f}: {n} rows")
     elif cmd == "verify" and len(args) <= 1:
         sys.exit(0 if verify(*args) else 1)
     else:
