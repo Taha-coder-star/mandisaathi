@@ -1,10 +1,10 @@
 # What is missing (open items)
 
 Last updated: Sat 28 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-038). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-041). Remove a line here when it is done, in the same PR.
 
 ## Done so far
-Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 skipped for now (ps_v1 draft needs all three members). Day 9: 9.1 renderer + validator DONE (D-037).
+Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 skipped for now (ps_v1 draft needs all three members). Day 9: 9.1 renderer + validator DONE (D-037); 9.3 lockbox rehearsal sealed (D-038–D-040; folders in `D:/fyp/data/lockbox/`, back them up outside the repo, never open before the witnessed rehearsal).
 6.4 voice benchmark: items, gold and tooling merged (PR #33, D-030); **recordings missing** (below).
 
 ## 1. Voice recordings (task 6.4): NOT done

@@ -82,3 +82,20 @@ def test_seal_is_never_replaced_and_empty_folder_refused(box):
 def test_real_lockbox_if_present_matches_decisions():
     # T6 hash check: locally present sealed folders must still match; CI has none, so this is a no-op there.
     assert lb.verify()
+
+
+def test_holdout_writes_only_the_holdout_year_once(tmp_path):
+    """Task 9.3: SYN (+ wheat months) and SYN-NULL holdout folders; nothing before the holdout start; never rewritten."""
+    import csv
+    from datetime import date
+
+    counts = lb.write_holdout(tmp_path)
+    assert set(counts) == {"holdout/syn.csv", "holdout/wheat_monthly.csv", "holdout_null/syn_null.csv"}
+    assert counts["holdout/syn.csv"] == counts["holdout_null/syn_null.csv"] > 0 and counts["holdout/wheat_monthly.csv"] == 12
+    cols = {"holdout/syn.csv": "market_date", "holdout_null/syn_null.csv": "market_date", "holdout/wheat_monthly.csv": "month"}
+    for f, col in cols.items():
+        with open(tmp_path / f, encoding="utf-8", newline="") as fh:
+            days = {date.fromisoformat(r[col]) for r in csv.DictReader(fh)}
+        assert date(2025, 12, 19) <= min(days) and max(days) <= date(2026, 12, 18), f
+    with pytest.raises(SystemExit):
+        lb.write_holdout(tmp_path)
