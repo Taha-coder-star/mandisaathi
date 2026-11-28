@@ -4,8 +4,9 @@
   python -m scripts.freeze_hash verify     re-hash and compare with the "- freeze <group> sha256 <hex>" lines in
                                            DECISIONS.md (exit 1 on a mismatch or a group not recorded yet)
 
-A group hash is sha256 over sorted "relpath NUL file-sha256" lines, as scripts/lockbox.py's folder_hash, so edits,
-additions, removals and renames all change it. Each file is hashed with CRLF turned into LF first: a Windows checkout
+A group hash is sha256 over sorted "relpath NUL file-sha256" lines, the same scheme as the task 2.5 sealing script, so
+edits, additions, removals and renames all change it. (This file must never name the sealed folder; a CI read-guard
+test checks every module under scripts/.) Each file is hashed with CRLF turned into LF first: a Windows checkout
 (core.autocrlf=true) and the VM / CI then give the same hash for the same committed content (D-014's E2.csv lesson).
 The benchmark audio is git-ignored; manifest.csv holds each audio file's sha256 (scripts/voice_pull.py), so hashing the
 manifest covers the audio without putting voices in git. The seed lives inside spec.yaml (meta.seed), so the spec
