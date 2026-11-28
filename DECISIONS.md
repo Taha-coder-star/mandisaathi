@@ -557,4 +557,5 @@ Second-annotator change to D-044 rule 2, from the multi-turn proofread. Only `M-
 - **Not changed:** `M-FU-10`/`M-FU-11` say "rate", so they stay `price_now`; `M-FU-12` ("andaza") stays `get_forecast` (file 10 scenario 3b). The word decides the tool; SPEC §2.4 says so.
 - **Open:** `best_mandis` gets an optional `mandi` arg (F2 for one ranked mandi). The F2 service (task 12.x) and the renderer's detail card must accept it.
 - **Renumbering:** the benchmark freeze hash that D-044 called D-045 is now **D-046**.
+- **Proofread (second annotator):** Ashna read all 30 multi-turn items on 2026-11-28 (input, Urdu spelling, gold). Only `M-FU-09` changed; the MIX labels of `M-FU-12/15/16` were kept as labelled. This closes D-044's single-annotation caveat for `multiturn.jsonl`; `text.jsonl` and `voice.jsonl` still open.
 - Evidence: `pytest tests/test_benchmark_multiturn.py` 7 passed.
