@@ -23,7 +23,7 @@ with fixes (PR #53, D-045). Full suite 643 passed with Postgres 16.
 - [ ] **S2 = Ashna**: row is committed on her local branch `task-6.4-recordings-s2`
   (`S2,Ashna,18-25,F,urdu,P2,2026-11-28`); it goes into the same PR as her notes. **Check the phone class:** Realme
   RMX5303 is maybe a budget phone (= P1, not P2). If so: swap phone with another speaker, or record a new decision.
-- [ ] **S3**: ask the supervisor (5 notes, P3 iPhone). If they say no, pick another Urdu-accent speaker.
+- [ ] **S3**: find an Urdu-accent speaker (5 notes on P3 iPhone). Decided 2026-11-28: the supervisor is **not** asked to record.
 - [ ] **S4**: find an Urdu-accent speaker (5 notes on P1).
 - [ ] **S6**: find a Punjabi-accent speaker (5 notes on P3).
 - [ ] **S5 (Ammi)**: write her `consent_date` into `speakers.csv`.
@@ -71,7 +71,7 @@ benchmark freeze 9.4 (Day 10).
 |---|---|---|---|---|
 | S1 | project owner | P1 (cheap Android) | V01–V04, V23 | not recorded |
 | S2 | Ashna (Urdu accent), consent 2026-11-28 | P2 (mid Android); phone class to confirm (§0 B) | V05–V08, V24 | not recorded |
-| S3 | supervisor (**not asked yet**) | P3 (iPhone) | V09–V12, V25 | not recorded |
+| S3 | **missing: name needed** (Urdu accent; not the supervisor, decided 2026-11-28) | P3 (iPhone) | V09–V12, V25 | not recorded |
 | S4 | **missing: name needed** (Urdu accent) | P1 | V13–V14, V26–V28 | not recorded |
 | S5 | Ammi (Punjabi accent) | P2 | V15–V18, V29 | not recorded; consent agreed, date not yet in `speakers.csv` |
 | S6 | **missing: name needed** (Punjabi accent) | P3 | V19–V22, V30 | not recorded |
