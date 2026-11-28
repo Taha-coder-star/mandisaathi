@@ -102,6 +102,7 @@ def every_template(lang):
     for slot in ("crop", "place", "quantity", "quantity_unit", "horizon"):
         yield render.clarify(slot, lang)
     yield render.clarify("place", lang, ["DGKHAN", "RYKHAN"])
+    yield render.clarify("place", lang, unknown_place=True)
     yield render.out_of_coverage(lang)
     yield render.out_of_scope(lang)
     yield render.unknown(lang)
@@ -125,6 +126,9 @@ def test_template_contents():
     near = render.where_to_sell({**F2, "rows": F2["rows"][1:]}, "ru").text
     assert "Nazdeeki mandi (Okara) theek hai" in near
     assert render.out_of_coverage("ru").text.startswith("Abhi sirf Punjab ki mandiyan aur pyaz, tamatar aur aloo.")
+    # an unknown place says so (file 03 §4.3, V30/T-AMB-03); a missing place only asks (V29)
+    assert render.clarify("place", "ru", unknown_place=True).text.startswith("Is jagah ki maloomat mere paas nahi.")
+    assert "maloomat" not in render.clarify("place", "ru").text
     assert render.no_forecast(None, "ru", "ONION", "LAHORE").text.startswith("Is mandi ka andaza dene ke liye data kaafi nahi")
     assert "لاہور" in render.price(price(), "ur").text and "11 دسمبر" in render.price(price(), "ur").text
     assert SYNTH in render.CONSENT_TEXT and "STOP" in render.CONSENT_TEXT and "pakka" not in render.CONSENT_TEXT
