@@ -495,7 +495,7 @@ Task 8.3 `params/ps_v1.yaml` draft (thresholds, costs, S1–S5, valid-null wordi
 
 ## D-042 · 2026-11-28 · Taha · PROPOSED (my row check pending)
 Task 8.4 literature review (`docs/lit_review.md`). File 11 DONE: "15 annotated papers; comparison table incl. Namal FYP and Zarai Mandi".
-- **Citations checked by Claude, not by me.** A new `Cite check` column records it. All 19 citations were matched against the DOI or index page on 2026-11-28; the key result was checked as well for rows 7–12, 16, 18 and 19.
+- **Citations checked by Claude, not by me.** A new `Cite check` column records it. 15 of 19 citations were matched against the DOI or index page on 2026-11-28; rows 1, 5, 6 and 17 use well-known IDs and were not re-fetched. The key result was checked as well for rows 7–12, 16, 18 and 19.
 - **`Read` is unchanged** (all `draft`). Under the 1.7 protocol only my own check makes a row `abstract`/`full`. **8.4 is DONE when I have checked ≥ 15 rows.**
 - **Corrections from the check:**
   - Row 10: vol/pages 644–662 and the full author list. Key result: ARIMA ≈ LSTM, CNN+LSTM best, Prophet worse.

@@ -1,6 +1,7 @@
 # Literature review: MandiSaathi (tasks 1.7 → 8.4)
 
-Status: 19 rows annotated, all citations checked 2026-11-28, comparison table written (task 8.4, D-042);
+Status: 19 rows annotated; 15 of 19 citations checked against the DOI/index page 2026-11-28 (rows 1, 5, 6, 17 use
+well-known IDs, not re-fetched); comparison table written (task 8.4, D-042);
 **open: I must check ≥ 15 rows myself (`Read` → `abstract`/`full`)**. Started 2026-11-23 (task 1.7). Due complete: Day 8 (task 8.4): ≥ 15 annotated papers + comparison
 table incl. Namal FYP and Zarai Mandi. Feeds report chapter 2 (task 18.1).
 
@@ -25,7 +26,7 @@ table incl. Namal FYP and Zarai Mandi. Feeds report chapter 2 (task 18.1).
 Read level: `full` = whole paper read by me; `abstract` = abstract/summary checked by me;
 `draft` = annotation drafted by Claude from abstracts/indexes, **not yet checked by me** (must become
 `abstract` or `full` before the report cites it). Report ref = number in the FYP-I report draft.
-Cite check = Claude matched authors, title, venue and volume/pages against the DOI or index page on that date, and the
+Cite check = Claude matched authors, title, venue and volume/pages against the DOI or index page on that date (rows 1, 5, 6, 17 not re-fetched), and the
 key result too for rows 7–12, 16, 18, 19 (D-042). It does not change `Read`: only my own check does.
 
 | # | Theme | Citation | Problem & data | Method | Key result | Use in MandiSaathi | Read | Report ref | Cite check (2026-11-28) |
