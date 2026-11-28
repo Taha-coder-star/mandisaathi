@@ -492,3 +492,25 @@ Task 8.3 `params/ps_v1.yaml` draft (thresholds, costs, S1–S5, valid-null wordi
 - **No code reads the new blocks yet.** `tests/test_ps_v1.py` keeps the constants already in `mandi/price.py`, `mandi/ingest/qc.py` and `mandi/resolve.py` equal to ps_v1 (a changed value fails it). The F2 engine (12.x) and alerts (15.x) read their blocks when built.
 - `f1_eval` is unchanged: `python -m scripts.score_e2` reproduces `results/E2.csv` byte for byte (sha256 a8b7af9b…, as D-033).
 - Evidence: local 633 passed, 0 skipped with Postgres 16; ruff clean.
+
+## D-042 · 2026-11-28 · Taha · PROPOSED (my row check pending)
+Task 8.4 literature review (`docs/lit_review.md`). File 11 DONE: "15 annotated papers; comparison table incl. Namal FYP and Zarai Mandi".
+- **Citations checked by Claude, not by me.** A new `Cite check` column records it. All 19 citations were matched against the DOI or index page on 2026-11-28; the key result was checked as well for rows 7–12, 16, 18 and 19.
+- **`Read` is unchanged** (all `draft`). Under the 1.7 protocol only my own check makes a row `abstract`/`full`. **8.4 is DONE when I have checked ≥ 15 rows.**
+- **Corrections from the check:**
+  - Row 10: vol/pages 644–662 and the full author list. Key result: ARIMA ≈ LSTM, CNN+LSTM best, Prophet worse.
+  - Row 11: authors R. L. Manogna, V. Dharmaji, S. Sarang; *Sci. Rep.* 15, 20903. Data: 23 commodities, 165 markets, daily 2010–2024. GRU/LSTM best; no naive benchmark.
+  - Row 12: M. Anwar et al., MPRA 66678, Sep 2015. Uses annual data 1998–2014, so context only.
+  - Row 18: full author list. Content taken from index/citing pages only; MDPI returns 403 to fetches.
+  - Row 19: first author is **D. J. Samuel Ravindran**, not "D. J. Samuel"; full title. Result: 95.2% on a 504-question benchmark.
+- **Still open:**
+  - Row 14 (Aker): the "10–16%" figure is not confirmed. The published abstract was unreachable; the 2008 working paper gives ≥ 6.4% and ~20%. Check it before citing the figure.
+  - Row 9 is an arXiv preprint (v1 only, no journal version found).
+- **Comparison table:** Namal FYP, Zarai Mandi, AMIS Punjab and MandiSaathi.
+  - Namal facts (RF, AMIS 2021–2025, 8 crops, 10 cities, Streamlit, no accuracy shown) come from the project page via the search index, because the page refused connections.
+  - Zarai Mandi and AMIS facts are the report draft's (sites accessed 17–18 Nov). Zarai Mandi is not fetched (never-scrape rule).
+  - Kissan helplines were dropped: no citable public source found.
+- **Report draft needs fixing (tasks 16.4 / 18.1):**
+  - ref [13] author name (see row 19);
+  - Table 1 calls [12] a "deployed field system in Pakistan", which is not confirmed;
+  - "Add ≥ 10 domain papers" can now be filled from rows 7–12 and 14–16.
