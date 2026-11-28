@@ -51,3 +51,19 @@ def test_done_qc_flags_every_injected_defect():
     assert per40 and all(TO_PER_100KG[gen[i]["unit_raw"]] == 2.5 for i in per40)
     clean = [i for i in range(len(gen)) if i not in set(bad)]
     assert sum(1 for i in clean if f[i]) / len(clean) < 0.02  # false positives stay rare
+
+
+def test_e1_verdict_fails_above_envelope_but_not_below():
+    """Task 9.2 (D-043): above env high or a moved trough fails G1 realism; under the retail low edge does not."""
+    from collections import Counter
+
+    from scripts.e1_realism import verdict
+    elig = Counter({"ONION": 12, "TOMATO": 12})
+    season = [["ONION", 5, 5], ["TOMATO", 5, 5]]
+    below = {"TOMATO": [(2025, 4349, 0, 0, 4400, 8000)]}  # (year, median, p10, p90, env low, env high)
+    assert all(r[2] for r in verdict(True, below, season, elig))
+    above = {"TOMATO": [(2025, 8100, 0, 0, 4400, 8000)]}
+    assert [r[2] for r in verdict(True, above, season, elig)] == [True, False, True, True]
+    assert not verdict(True, below, [["ONION", 5, 4]], elig)[2][2]
+    assert not verdict(True, below, season, Counter({"ONION": 4}))[3][2]
+    assert not verdict(False, below, season, elig)[0][2]
