@@ -21,12 +21,13 @@ _MATRIX = [("M-FU", 1, 4, "CROP_SWITCH"), ("M-FU", 5, 6, "PLACE_SWITCH"), ("M-FU
            ("M-CMD", 1, 3, "ALERT_SUBSCRIBE"), ("M-CMD", 4, 6, "ALERT_SET_THRESHOLD"), ("M-CMD", 7, 8, "ALERT_LIST"),
            ("M-CMD", 9, 10, "STOP")]
 SPEC_IDS = [(f"{p}-{n:02d}", c) for p, lo, hi, c in _MATRIX for n in range(lo, hi + 1)]
-ARGS = {"price_now": {"crop", "mandi"}, "get_forecast": {"crop", "mandi", "h"}, "best_mandis": {"crop", "origin", "quantity_kg"},
+ARGS = {"price_now": {"crop", "mandi"}, "get_forecast": {"crop", "mandi", "h"},
+        "best_mandis": {"crop", "origin", "quantity_kg", "mandi"},  # mandi only on a detail request ("tafseel", D-045)
         "get_outlook": {"crop", "month", "mandi"}, "set_alert": {"crop", "mandi", "direction", "threshold"},
         "list_alerts": set(), "stop": set()}
 TURN_TOOLS = {"PRICE_NOW": "price_now", "FORECAST": "get_forecast", "WHERE_TO_SELL": "best_mandis", "OUTLOOK": "get_outlook",
               "ALERT": {"SUBSCRIBE": "set_alert", "SET_THRESHOLD": "set_alert", "LIST": "list_alerts"}, "STOP": "stop"}
-REF_TOOLS = {"PRICE_NOW": "price_now", "FORECAST": "get_forecast"}
+REF_TOOLS = {"PRICE_NOW": "price_now", "FORECAST": "get_forecast", "WHERE_TO_SELL": "best_mandis"}
 ACTIONS = {"ALERT_SUBSCRIBE": "SUBSCRIBE", "ALERT_SET_THRESHOLD": "SET_THRESHOLD", "ALERT_LIST": "LIST"}
 NUMERIC = {"quantity_kg", "h", "threshold", "position", "value", "value_kg"}
 
@@ -131,14 +132,17 @@ def test_tool_calls_follow_from_state():
         name = TURN_TOOLS[g["intent"]]
         if isinstance(name, dict):
             name = name[g["alert_action"]]
-        if ref:  # a detail request: price (or forecast) at the referenced mandi
+        if ref:  # the referenced mandi: F2 detail card ("tafseel"), its price ("rate") or its forecast ("andaza")
             name = REF_TOOLS[g["intent"]]
         mandis = [ref["value"]] if ref else ([s["place"]["canonical"]] + add if s["place"] else [None])
         assert len(cs) == len(mandis) and all(c["name"] == name for c in cs), i
         for c, m in zip(cs, mandis, strict=True):
             a = c["args"]
             assert set(c) == {"name", "args"} and set(a) <= ARGS[name] and ARGS[name] - set(a) <= {"mandi"}, i
-            slot = {"crop": s["crop"], "mandi": m, "origin": m, "quantity_kg": s["quantity_kg"],
+            if name == "best_mandis":  # a mandi arg narrows F2 to one ranked mandi; only a reference does that
+                assert ("mandi" in a) == bool(ref), i
+            origin = s["place"]["canonical"] if ref and s["place"] else m  # a reference keeps the state's origin
+            slot = {"crop": s["crop"], "mandi": m, "origin": origin, "quantity_kg": s["quantity_kg"],
                     "h": (s["horizon"] or {}).get("h"), "month": (s["horizon"] or {}).get("month")}
             for k, v in a.items():
                 if k in slot:
@@ -147,7 +151,7 @@ def test_tool_calls_follow_from_state():
                 assert a["direction"] in {"ABOVE", "BELOW"} and type(a["threshold"]) is int and a["threshold"] > 0, i
                 assert re.search(rf"\b{a['threshold']}\b", it["input"]), i
             if g["intent"] == "WHERE_TO_SELL":
-                assert m in {"OKARA", "SAHIWAL", "KASUR", "LAHORE"}, i
+                assert origin in {"OKARA", "SAHIWAL", "KASUR", "LAHORE"}, i
         if g["intent"] == "FORECAST":
             assert s["horizon"]["kind"] == "DAYS", i
 

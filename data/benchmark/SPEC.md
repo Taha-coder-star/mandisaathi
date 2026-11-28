@@ -117,8 +117,10 @@ replays every item through `app.state.apply` (D-032).
 Labelling rules for multi-turn and command items (9.4, D-044; binding for 15.3):
 - Patches use `value` (7.2 generalised the `id` of the first draft); a place value is `{canonical, status, role, mandi_ids}`.
   `gold.intent` is the intent of this turn; `state_after.intent` is the stored intent after the patches.
-- `ref` changes no state (D-032); the tool call uses the mandi at that position. A detail request ("2 number wali ki
-  tafseel") is `PRICE_NOW`; with a horizon ("... ka agle hafte ka andaza") it is `FORECAST` and only the horizon patch
+- `ref` changes no state (D-032); the tool call uses the mandi at that position. The word decides the tool (D-045):
+  a detail request ("2 number wali ki tafseel") is the F2 detail card, `WHERE_TO_SELL` → `best_mandis` with the state's
+  crop, origin and quantity plus `mandi` = that position (file 06 "[1 ki tafseel]"); a rate request ("pehli wali ka
+  rate") is `PRICE_NOW`; with a horizon ("... ka agle hafte ka andaza") it is `FORECAST` and only the horizon patch
   changes the state (file 10 scenario 3b).
 - `add` ("Lahore ka bhi"): `state_after.place.canonical` stays the first place; `tool` is a list, one call per place in order.
 - `correct` to a `BORI` or unit-less quantity → `CLARIFY` `quantity_unit`, `quantity_kg` null (never assume the bag weight).

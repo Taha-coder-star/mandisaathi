@@ -548,4 +548,13 @@ Task 9.4 needs 40 text + 30 voice + 5 controls + 30 multi-turn/commands, then a 
   5. **New tool `list_alerts` `{}`** for ALERT + LIST (file 06/08 name no tool for it). **Open:** the 14.x alert service must expose it.
   6. STOP: state after = all null.
 - **Not checked:** the parser (`mandi/parse.py`) is stateless and was not run on these inputs, so the in-sample worry of 7.1 is still open until 15.3. No Urdu proofreading by a second person.
-- **Left for DONE:** proofread text + voice + multi-turn gold after a gap; the 6.4 recordings; then add a benchmark hash command, freeze, and record the hash as D-045.
+- **Left for DONE:** proofread text + voice + multi-turn gold after a gap; the 6.4 recordings; then add a benchmark hash command, freeze, and record the hash as D-045 (now D-046, see D-045).
+
+## D-045 · 2026-11-28 · Ashna · PROPOSED (9.4 proofread: "tafseel" on a ranked list = F2 detail card)
+Second-annotator change to D-044 rule 2, from the multi-turn proofread. Only `M-FU-09` changes.
+- **Decision:** "N number wali ki tafseel" after an F2 ranking asks for that mandi's take-home breakdown (price × quantity, minus commission, transport, fees and spoilage), not for today's price. Gold: `intent` `WHERE_TO_SELL`, tool `best_mandis` `{crop, origin, quantity_kg, mandi}` from the state plus `mandi` = the referenced position. State unchanged (D-032).
+- **Why:** file 06 puts the `[1 ki tafseel]` button on the F2 answer next to the "Kharche: transport …, commission 6%" line and answers "2 number wali ki tafseel" with "re-fetch current numbers → detail card with mandi name echoed". A bare `price_now` would not explain why that mandi ranked where it did.
+- **Not changed:** `M-FU-10`/`M-FU-11` say "rate", so they stay `price_now`; `M-FU-12` ("andaza") stays `get_forecast` (file 10 scenario 3b). The word decides the tool; SPEC §2.4 says so.
+- **Open:** `best_mandis` gets an optional `mandi` arg (F2 for one ranked mandi). The F2 service (task 12.x) and the renderer's detail card must accept it.
+- **Renumbering:** the benchmark freeze hash that D-044 called D-045 is now **D-046**.
+- Evidence: `pytest tests/test_benchmark_multiturn.py` 7 passed.
