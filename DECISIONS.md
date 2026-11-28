@@ -536,7 +536,7 @@ Task 9.2 realism check E1 final + crop list proposal (`scripts/e1_realism.py`, `
   - **If the real data arrives before FYP-II S1 (even before G2 on 4 Dec):** a format check only, then seal the final 12 months as the real lockbox the same day (`docs/lockbox_procedure.md`). Nobody looks further. G2 requires every freeze to happen "before any real data is seen".
 - Evidence: `python -m scripts.e1_realism` → "QC recall PASS; realism PASSED", exit 0; local pytest 634 passed, 0 skipped (Postgres 16); ruff check clean.
 
-## D-044 · 2026-11-28 · Taha · PROPOSED (task 9.4 part 1: the 30 multi-turn/command items; freeze not done)
+## D-044 · 2026-11-28 · Taha · CONFIRMED (task 9.4 part 1: the 30 multi-turn/command items; second-annotator proofread D-045; freeze not done)
 Task 9.4 needs 40 text + 30 voice + 5 controls + 30 multi-turn/commands, then a hash in `DECISIONS.md`. This entry covers only the multi-turn set. The freeze (and its hash, D-045) waits for the recordings.
 - **Written:** `data/benchmark/multiturn.jsonl`, 30 items to the SPEC §3.4 matrix: 20 follow-ups (crop switch 4, place switch 2, place add 2, reference 4, horizon 4, correction 4) and 10 commands (alert subscribe 3, set threshold 3, list 2, STOP 2). RU 19, EN 5, MIX 3, UR 3 (counted from the file). Single-annotated by me (solo deviation, as D-020).
 - **Check:** `tests/test_benchmark_multiturn.py` (7 tests) replays each item through the real `app.state.apply`: context state + gold patches must equal `state_after`, and each tool call must follow from that state (crop, mandi/origin, quantity_kg, h, month; ref value = `bot_shown[position-1]`). Patch raws are checked against the gazetteer. Mutation check: 3 deliberate corruptions (a wrong `state_after`, a wrong threshold, a wrong ref position) each failed it.
@@ -550,7 +550,7 @@ Task 9.4 needs 40 text + 30 voice + 5 controls + 30 multi-turn/commands, then a 
 - **Not checked:** the parser (`mandi/parse.py`) is stateless and was not run on these inputs, so the in-sample worry of 7.1 is still open until 15.3. No Urdu proofreading by a second person.
 - **Left for DONE:** proofread text + voice + multi-turn gold after a gap; the 6.4 recordings; then add a benchmark hash command, freeze, and record the hash as D-045 (now D-046, see D-045).
 
-## D-045 · 2026-11-28 · Ashna · PROPOSED (9.4 proofread: "tafseel" on a ranked list = F2 detail card)
+## D-045 · 2026-11-28 · Ashna · CONFIRMED (9.4 proofread: "tafseel" on a ranked list = F2 detail card)
 Second-annotator change to D-044 rule 2, from the multi-turn proofread. Only `M-FU-09` changes.
 - **Decision:** "N number wali ki tafseel" after an F2 ranking asks for that mandi's take-home breakdown (price × quantity, minus commission, transport, fees and spoilage), not for today's price. Gold: `intent` `WHERE_TO_SELL`, tool `best_mandis` `{crop, origin, quantity_kg, mandi}` from the state plus `mandi` = the referenced position. State unchanged (D-032).
 - **Why:** file 06 puts the `[1 ki tafseel]` button on the F2 answer next to the "Kharche: transport …, commission 6%" line and answers "2 number wali ki tafseel" with "re-fetch current numbers → detail card with mandi name echoed". A bare `price_now` would not explain why that mandi ranked where it did.
