@@ -1,7 +1,7 @@
 # What is missing (open items)
 
 Last updated: Sat 28 Nov 2026. Plan: `plan3/pdf/11_Execution_Plan.pdf` (Day 1 = Mon 23 Nov, Mon–Fri).
-Decisions: `DECISIONS.md` (next free ID: D-042). Remove a line here when it is done, in the same PR.
+Decisions: `DECISIONS.md` (next free ID: D-043). Remove a line here when it is done, in the same PR.
 
 ## Done so far
 Days 1–5 complete; gate M1 passed (D-026). Day 6: 6.1 resolver, 6.2 orchestrator, 6.3 features merged. Day 7: 7.1 rule parser (D-031), 7.2 query state manager (D-032), 7.3 baselines E2 (D-033) merged. Day 8: 8.1 speech service DONE live 2026-11-28 (D-035); 8.2 price service + coverage refresh DONE (D-036); 8.3 ps_v1 draft written (D-041), **awaiting supervisor review** (= DONE). Day 9: 9.1 renderer + validator DONE (D-037); 9.3 lockbox rehearsal sealed (D-038–D-040; folders in `D:/fyp/data/lockbox/`, back them up outside the repo, never open before the witnessed rehearsal).
@@ -50,6 +50,7 @@ media ID on the laptop, D-035). Whether a volunteer number not on Meta's test-re
 | Silence levels vs the real 6.4 controls (D-035) | before G2 (Day 10) | 8.1 is DONE. When the 6.4 silent (5 s, 20 s) and music controls go through the bot, check each `message_log` row: silent → `precheck` SILENT with 0 attempts, music → OK. `stt_meta` holds `active_ratio` and `p10/p50/p95/max_dbfs`; adjust `ACTIVE_DBFS`/`MIN_ACTIVE` in `app/speech.py` only if a control lands on the wrong side. **Quota:** every note to the bot spends Scribe free minutes (~12/month). |
 | 6.2 live check on the VM | soon | Deploy main (`git pull`, `sudo docker compose up -d --build`; migrate applies 003, 004 and 005). Text from a phone: consent + echo once; "STOP": confirmation, then `SELECT count(*) FROM wa_user` drops. |
 | Proofread Urdu transcripts + benchmark gold | before 9.4 (Day 10) | Re-read `data/benchmark/text.jsonl` and `voice.jsonl` (single-annotated, D-020/D-030). |
+| 8.4 lit review: check ≥ 15 rows myself (D-042) | 8.4 DONE; before 18.1 | Open `docs/lit_review.md`; for each row read the abstract (link in `Cite check`), fix the annotation if needed, set `Read` to `abstract`/`full`. Check row 14's "10–16%" figure first. |
 | G1: co-supervisor acknowledges the real-data request | Fri 4 Dec (task 10.2) | Request sent 23 Nov on WhatsApp; chase if no reply. |
 | Tomato yearly medians below envelope (D-024) | before G2 freeze | Review tomato base/envelope in `data/synthetic/spec.yaml`; re-run L2 (`tests/test_features.py`) and `make results` after any spec change. (SYN-NULL's drifting spreads: decided, kept as is, D-034.) |
 | AWS credit end date (D-009) | — | Check Billing → Credits; fallback Oracle Always-Free. |
