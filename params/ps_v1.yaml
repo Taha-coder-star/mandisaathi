@@ -1,5 +1,9 @@
-# ps_v1 parameter set. DRAFT: task 8.3 writes the rest (thresholds, costs, S1-S5, valid-null wording);
-# FROZEN at gate G2 (task 10.3, git tag ps_v1). After the tag, no edit; results are regenerated with `make results`.
+# ps_v1 parameter set (task 8.3, D-041). Every research threshold, cost and pass criterion has an ID here.
+# FROZEN at gate G2 (task 10.3, git tag ps_v1), before any real data is seen. After the tag: no edit; a change is
+# ps_v2 (FYP-II S5) and a recorded decision. Results are regenerated with `make results`.
+# Tags: ASSUMPTION = a plan default with no market source yet (R7 trader interviews / co-supervisor before ps_v2);
+#       NEEDS_REVIEW = the plan gives no value; the reviewer accepts or changes it before the tag.
+# Values also hard-coded in mandi/ are kept equal by tests/test_ps_v1.py.
 
 f1_eval:
   # Task 7.3 (D-033): development folds shared by E2 (baselines), E3 (11.1, LightGBM) and E5 (12.2, F2 backtest).
@@ -15,3 +19,123 @@ f1_eval:
   # Sanity rule written before the first E2 run (D-033). SYN-NULL is a pure random walk (D-014), where LAST is the best
   # point forecast: no baseline may show skill there. Fail -> leakage/bug hunt before any number is reported.
   sanity: {variant: SYN-NULL, rule: "no baseline x crop x h has mase_hi < 1"}
+
+coverage:
+  # Coverage gate (file 03 §6, file 09 R-08). Code: mandi/price.py. Only eligible series get F1/F2 answers.
+  window_days: 365        # look-back for the coverage share
+  min_pct: 0.60           # >= 60% of trading days with an OK quote in the window
+  recent_within: 3        # newest OK quote at most 3 trading days old
+  stale_after: 2          # older than 2 trading days -> stale line on today's rate
+
+qc:
+  # Outlier rules (task 4.3; D-024 E1 sweep: FP < 1%, recall 100%). Code: mandi/ingest/qc.py.
+  window_days: 28
+  k_robust_sd: 4.0
+  sd_floor: 0.05          # log units
+  min_window_obs: 5
+  neighbour_ratio: 5.0
+  min_neighbours: 2
+
+f1_model:
+  # File 04 §1.2, file 09 R-15.
+  quantiles: [0.1, 0.5, 0.9]
+  max_tuning_trials: 30   # development folds only; a fixed budget so a null cannot be tuned away
+  conformal: {target_coverage: 0.80, per: [crop, h], fit_on: latest calibration fold}
+  direction_move: 0.05    # direction accuracy is scored on moves > 5%
+
+f3:
+  # File 04 §2. Offline in FYP-I (task 10.4); in the bot only if S3 development skill > 0 (file 09 R-16).
+  issue_lead_months: [3, 4, 5]
+  evaluation: leave-future-out from 2015
+  terciles: past z (below / near / above normal)
+  no_skill_rule: "development skill <= 0 for a crop -> ship climatology and say the outlook adds nothing"
+
+f2:
+  # File 04 §3.2: Net(m) = Q*P(m, t+delay)*(1 - commission) - T(km, Q) - fees - Q*P*spoilage*delay. Deterministic, no LLM.
+  radius_km: 150                    # F2-radius: candidates are eligible mandis within this road distance. ASSUMPTION
+  delay: {over_km: 80, days: 1}     # 0 days to the home mandi, 1 day when road distance > 80 km. ASSUMPTION
+  commission: 0.06                  # ASSUMPTION (file 04 default)
+  spoilage_per_day: {TOMATO: 0.04, ONION: 0.01, POTATO: 0.01, WHEAT: 0.0}   # ASSUMPTION (file 04)
+  fees_pkr_per_100kg: 50            # market + unloading, same at every mandi (cancels in the gain). NEEDS_REVIEW
+  transport:
+    # T = road_km (one way; the hire price includes the return) x PKR/km of the smallest vehicle that carries Q; more
+    # than the largest -> several trucks. Scaled by diesel_now / diesel_ref (file 04 "from the diesel price"); FYP-I has
+    # no diesel feed, so the scale is 1. All values NEEDS_REVIEW: no public source found; R7 interviews before ps_v2.
+    diesel_ref_pkr_litre: 280
+    vehicles:
+      - {name: pickup, max_mann: 25, pkr_per_km: 90}     # Suzuki Ravi / Shehzore class, ~1 t
+      - {name: mazda, max_mann: 125, pkr_per_km: 160}    # ~5 t
+      - {name: truck, max_mann: 375, pkr_per_km: 260}    # 10-wheeler, ~15 t
+  risk_rule: "a mandi other than the nearest is advised only if its gain over the nearest is still > 0 with its P10 and the nearest's P50; otherwise 'Nazdeeki mandi theek hai' with the numbers"
+  top_n: 3
+  sensitivity:                      # reported with every F2 result (file 04 §3.2, file 09 R-12)
+    transport_scale: [0.5, 1.0, 1.5]
+    commission: [0.04, 0.06, 0.08]
+    spoilage_scale: [0.5, 1.0, 2.0]
+
+resolve:
+  pin_max_km: 150         # file 06 §5: a location pin farther than this from every covered mandi -> out of coverage
+
+alerts:
+  # File 06 §4 (anti-spam, cost cap). Built in task 15.x.
+  rearm_pct: 0.03                   # a threshold re-arms only after the price moves back 3% past it
+  max_per_subscription_per_day: 1
+  max_per_farmer_per_day: 3
+  from_suspect: false               # no alert from a SUSPECT price
+  daily_template_budget: 100        # file 06: "a count in config", no value; digests stop first. NEEDS_REVIEW
+
+criteria:
+  # Pre-registered pass criteria (file 04 §1.4/§2.3/§3.3, file 05 §5, file 10 §6; A1 = file 03 §9). The valid-null
+  # wording is agreed here, before any result (file 09 R-15): a null is reported in these words, never tuned away.
+  fyp1_pipeline_check:
+    # A1: FYP-I runs on synthetic data, where the truth is known. No claim about real-market accuracy in FYP-I.
+    data: SYN and SYN-NULL development folds (f1_eval)
+    rules:
+      - "F1 beats naive on SYN: pooled MASE < 1 at h = 1-3 with the 95% block-bootstrap upper bound < 1"
+      - "F1 does not beat naive on SYN-NULL: no crop x h has a MASE upper bound < 1"
+      - "80% ranges reach nominal coverage on SYN: pooled coverage 75-85%"
+      - "planted-signal fixture recovered (L6) and leakage tests L1-L6 pass"
+    on_fail: "leakage / bug hunt before any number is reported (D-033 sanity rule); never a tuning target"
+  S1:
+    feature: F1 short-term forecast
+    data: real lockbox (FYP-II S8, opened once)
+    rule: "pooled MASE < 1 at h = 1-3 with the 95% block-bootstrap upper bound < 1; coverage of the 80% range 75-85%"
+    valid_null: "short-term prices behaved like a random walk in the test year"
+  S2:
+    feature: F2 where to sell
+    data: backtest per origin district x crop x day, PROP vs NEAREST and YESTERDAY-BEST; real lockbox (FYP-II S8)
+    rule: "mean realised gain of PROP over NEAREST > 0 PKR/100 kg with the 95% CI lower bound > 0"
+    valid_null: "after costs, the nearest mandi was as good as our advice"
+  S3:
+    feature: F3 harvest-month outlook
+    data: leave-future-out from 2015; real lockbox year (FYP-II S8)
+    rule: "pooled CRPS skill vs climatology > 0 with the bootstrap CI lower bound > 0"
+    valid_null: "harvest-month prices were not predictable beyond seasonal averages 3-5 months ahead"
+  S4:
+    # Bot benchmark (frozen at 9.4): the file 10 §6 rows plus the file 05 §5 rows file 10 does not repeat.
+    # The two files share every value they both state (checked for D-041).
+    text_intent: 0.95                 # 40 benchmark texts
+    text_critical_slots: 0.95         # crop, place, quantity + unit, exact
+    voice_transcription: {overall: 0.85, quiet: 0.90}   # 30 voice notes with all critical slots correctly transcribed
+    voice_end_to_end_slots: 0.90
+    voice_gap_to_paired_text_max_pts: 7                 # file 05
+    script_usable: 0.95                                 # file 05
+    controls_producing_request: 0     # 5 silence / music controls
+    clarify_on_ambiguous: 0.90
+    clarify_on_clear_max: 0.10
+    place_resolution: {exact_alias_correct: 1.0, ambiguous_asks: 1.0, non_exact_echoed: 1.0}
+    out_of_scope_redirected: 1.0                        # file 05
+    correct_tool: 0.95                                  # file 05
+    numbers_not_from_tool: 0
+    forecasts_for_uncovered: 0
+    follow_up_target: 0.90            # 20 multi-turn items
+    alerts: {duplicates: 0, from_suspect: 0}
+    latency_s: {text_p50: 4, text_p90: 7, voice_p50: 7, voice_p90: 10}   # voice notes <= 30 s
+    cost_usd_per_turn_tracked: 0.01   # file 05: tracked on the paid option, not gating
+    decision_rule: "the LLM is the primary parser only if it beats the rule parser by >= 5 points on text critical slots and passes grounding; an STT failing voice_transcription is never primary; if none passes, voice echo-confirm is always on"
+  S5:
+    # NEEDS_REVIEW: the plan names S5 only as "user-test analysis" (file 11 FYP-II S7-S8) plus gate M9 (>= 10 active
+    # participants). Written from those facts only; the reviewer adds or changes the measure before the tag.
+    feature: FYP-II user test (2 weeks, consented real farmers)
+    rule: ">= 10 active participants over the 2-week test (M9); usage, decisions and questionnaire answers reported descriptively with n"
+    valid_null: "farmers in the user test did not use the advice for their selling decisions"
