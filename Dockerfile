@@ -10,6 +10,7 @@ WORKDIR /srv
 COPY pyproject.toml ./
 COPY app ./app
 COPY mandi ./mandi
+COPY data/synthetic/spec.yaml ./data/synthetic/spec.yaml
 RUN pip install . && useradd --system --no-create-home mandi
 
 USER mandi

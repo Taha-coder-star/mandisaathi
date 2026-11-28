@@ -7,4 +7,5 @@
 plan3
 docs
 data
+!data/synthetic/spec.yaml
 tests
